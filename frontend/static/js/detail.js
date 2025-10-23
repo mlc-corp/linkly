@@ -1,6 +1,7 @@
 // static/js/detail.js
 
 const linkId = document.getElementById('linkIdData').value;
+const BASE_DOMAIN = window.BASE_DOMAIN || 'linkly.space';
 
 document.addEventListener('DOMContentLoaded', async () => {
     await cargarDatos();
@@ -46,14 +47,14 @@ function mostrarContenido(link, metrics) {
             <div class="variant-card">
                 <div>
                     <div class="variant-name">${escapeHtml(variant)}</div>
-                    <div class="variant-url">linkly.space/${escapeHtml(link.slug)}/${escapeHtml(variant)}</div>
+                    <div class="variant-url">${BASE_DOMAIN}/${escapeHtml(link.slug)}/${escapeHtml(variant)}</div>
                 </div>
                 <button class="btn-copy" onclick="copiarURL(event, '${escapeHtml(link.slug)}', '${escapeHtml(variant)}')">
                     Copiar
                 </button>
             </div>
         `).join('')
-        : '<div class="variant-card"><div class="variant-name">default</div><div class="variant-url">linkly.space/' + escapeHtml(link.slug) + '</div></div>';
+        : '<div class="variant-card"><div class="variant-name">default</div><div class="variant-url">' + BASE_DOMAIN + '/' + escapeHtml(link.slug) + '</div></div>';
 
     let metricsHTML = '';
     
@@ -177,7 +178,7 @@ function formatearFecha(isoDate) {
 }
 
 async function copiarURL(event, slug, variant) {
-    const url = `https://linkly.space/${slug}/${variant}`;
+    const url = `https://${BASE_DOMAIN}/${slug}/${variant}`;
     
     try {
         await navigator.clipboard.writeText(url);
