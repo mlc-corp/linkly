@@ -48,10 +48,8 @@ def get_link_metrics(link_id: str):
 
         if item:
             clicks = int(item.get("clicks", 0))
-            # merge byDevice
             for d, n in (item.get("byDevice") or {}).items():
                 by_device[d] = by_device.get(d, 0) + int(n)
-            # merge byCountry
             for c, n in (item.get("byCountry") or {}).items():
                 by_country[c] = by_country.get(c, 0) + int(n)
 
