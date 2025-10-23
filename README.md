@@ -15,4 +15,5 @@ Un mismo link (por ejemplo `linkly.space/evento2025`) puede tener variantes que 
 
 Todas las variantes redirigen al mismo sitio final, pero **permiten distinguir métricas** por canal, país o dispositivo.
 
+
 ---
