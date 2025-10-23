@@ -4,7 +4,7 @@ from typing import List, Optional, Dict
 import re
 
 class LinkCreate(BaseModel):
-    slug: str
+    slug: Optional[str] = None  # ahora es opcional
     title: str
     destinationUrl: HttpUrl
     variants: Optional[List[str]] = ["default"]
@@ -19,6 +19,8 @@ class LinkCreate(BaseModel):
     @field_validator("slug")
     @classmethod
     def validate_slug(cls, v):
+        if v is None:  # permitir None
+            return v
         pattern = r"^[a-z0-9-]{3,48}$"
         if not re.match(pattern, v):
             raise ValueError("slug must match ^[a-z0-9-]{3,48}$")

@@ -19,7 +19,7 @@ def create_link(payload):
     link_id = gen_link_id()
     created_at = datetime.utcnow().isoformat() + "Z"
 
-    item_by_id = {
+    item = {
         "PK": f"LINK#{link_id}",
         "SK": "META",
         "linkId": link_id,
@@ -30,27 +30,12 @@ def create_link(payload):
         "createdAt": created_at,
     }
 
-    item_by_slug = {
-        "PK": f"LINK#{slug}",
-        "SK": "META",
-        "linkId": link_id,
-        "slug": slug,
-        "destinationUrl": str(payload.destinationUrl),
-        "variants": payload.variants,
-        "enabled": True,
-        "createdAt": created_at,
-    }
-
     try:
-        table.put_item(Item=item_by_slug, ConditionExpression="attribute_not_exists(PK)")
-        table.put_item(Item=item_by_id)
+        table.put_item(Item=item)
     except ClientError as e:
-        err_code = e.response["Error"]["Code"]
-        if err_code == "ConditionalCheckFailedException":
-            raise HTTPException(status_code=409, detail=f"Slug '{slug}' already exists")
         raise HTTPException(status_code=500, detail=f"DynamoDB error: {e}")
 
-    return item_by_id
+    return item
 
 def list_links():
     resp = table.scan()
