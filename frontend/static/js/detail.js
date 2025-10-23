@@ -39,6 +39,107 @@ async function cargarDatos() {
     }
 }
 
+async function refrescarMetricas() {
+    const refreshBtn = document.getElementById('refreshMetricsBtn');
+    
+    // Mostrar estado de carga en el botón
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = '⟳ Actualizando...';
+    }
+    
+    try {
+        const metricsResponse = await fetch(`/api/links/${linkId}/metrics`);
+        
+        let metricsData = null;
+        if (metricsResponse.ok) {
+            metricsData = await metricsResponse.json();
+        }
+        
+        // Actualizar solo la sección de métricas
+        actualizarSeccionMetricas(metricsData);
+        
+        // Mostrar mensaje de éxito temporal
+        mostrarMensajeRefresh('✓ Métricas actualizadas', 'success');
+        
+    } catch (error) {
+        console.error('Error al refrescar métricas:', error);
+        mostrarMensajeRefresh('✗ Error al actualizar métricas', 'error');
+    } finally {
+        // Restaurar el botón
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = '⟳ Actualizar Métricas';
+        }
+    }
+}
+
+function mostrarMensajeRefresh(mensaje, tipo) {
+    const existingMsg = document.getElementById('refreshMessage');
+    if (existingMsg) {
+        existingMsg.remove();
+    }
+    
+    const msgDiv = document.createElement('div');
+    msgDiv.id = 'refreshMessage';
+    msgDiv.className = tipo === 'success' ? 'success-message' : 'error-message';
+    msgDiv.textContent = mensaje;
+    msgDiv.style.marginBottom = '20px';
+    
+    const container = document.getElementById('contentContainer');
+    container.insertBefore(msgDiv, container.firstChild);
+    
+    setTimeout(() => {
+        msgDiv.remove();
+    }, 3000);
+}
+
+function actualizarSeccionMetricas(metrics) {
+    const metricsContainer = document.getElementById('metricsSection');
+    
+    if (!metricsContainer) return;
+    
+    let metricsHTML = '';
+    
+    if (metrics && metrics.totals && metrics.totals.clicks > 0) {
+        const totals = metrics.totals;
+        
+        metricsHTML = `
+            <h2>📈 Métricas Totales</h2>
+            <div class="metrics-actions">
+                <button id="refreshMetricsBtn" class="btn-refresh" onclick="refrescarMetricas()">
+                    ⟳ Actualizar Métricas
+                </button>
+            </div>
+            
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-value">${totals.clicks.toLocaleString()}</div>
+                    <div class="metric-label">Clics Totales</div>
+                </div>
+            </div>
+
+            ${totals.byVariant ? generarBreakdown('Por Variante', totals.byVariant, totals.clicks) : ''}
+            ${totals.byDevice ? generarBreakdown('Por Dispositivo', totals.byDevice, totals.clicks) : ''}
+            ${totals.byCountry ? generarBreakdown('Por País', totals.byCountry, totals.clicks) : ''}
+        `;
+    } else {
+        metricsHTML = `
+            <h2>📈 Métricas</h2>
+            <div class="metrics-actions">
+                <button id="refreshMetricsBtn" class="btn-refresh" onclick="refrescarMetricas()">
+                    ⟳ Actualizar Métricas
+                </button>
+            </div>
+            <div class="empty-metrics">
+                Este link aún no ha recibido clics. Comparte las URLs para empezar a ver métricas.
+            </div>
+        `;
+    }
+    
+    metricsContainer.innerHTML = metricsHTML;
+}
+
 function mostrarContenido(link, metrics) {
     const container = document.getElementById('contentContainer');
     
@@ -54,39 +155,15 @@ function mostrarContenido(link, metrics) {
                 </button>
             </div>
         `).join('')
-        : '<div class="variant-card"><div class="variant-name">default</div><div class="variant-url">' + BASE_DOMAIN + '/' + escapeHtml(link.slug) + '</div></div>';
-
-    let metricsHTML = '';
-    
-    if (metrics && metrics.totals && metrics.totals.clicks > 0) {
-        const totals = metrics.totals;
-        
-        metricsHTML = `
-            <div class="card">
-                <h2>📈 Métricas Totales</h2>
-                
-                <div class="metrics-grid">
-                    <div class="metric-card">
-                        <div class="metric-value">${totals.clicks.toLocaleString()}</div>
-                        <div class="metric-label">Clics Totales</div>
-                    </div>
-                </div>
-
-                ${totals.byVariant ? generarBreakdown('Por Variante', totals.byVariant, totals.clicks) : ''}
-                ${totals.byDevice ? generarBreakdown('Por Dispositivo', totals.byDevice, totals.clicks) : ''}
-                ${totals.byCountry ? generarBreakdown('Por País', totals.byCountry, totals.clicks) : ''}
+        : `<div class="variant-card">
+            <div>
+                <div class="variant-name">default</div>
+                <div class="variant-url">${BASE_DOMAIN}/${escapeHtml(link.slug)}</div>
             </div>
-        `;
-    } else {
-        metricsHTML = `
-            <div class="card">
-                <h2>📈 Métricas</h2>
-                <div class="empty-metrics">
-                    Este link aún no ha recibido clics. Comparte las URLs para empezar a ver métricas.
-                </div>
-            </div>
-        `;
-    }
+            <button class="btn-copy" onclick="copiarURL(event, '${escapeHtml(link.slug)}', 'default')">
+                Copiar
+            </button>
+        </div>`;
 
     container.innerHTML = `
         <div class="card">
@@ -120,8 +197,13 @@ function mostrarContenido(link, metrics) {
             </div>
         </div>
 
-        ${metricsHTML}
+        <div class="card" id="metricsSection">
+            <div class="loading">Cargando métricas...</div>
+        </div>
     `;
+    
+    // Actualizar la sección de métricas
+    actualizarSeccionMetricas(metrics);
 }
 
 function generarBreakdown(titulo, data, total) {
@@ -149,23 +231,17 @@ function generarBreakdown(titulo, data, total) {
     return `
         <div class="breakdown-section">
             <div class="breakdown-title">${titulo}</div>
-            <div class="breakdown-list">
+            <div class="breakdown-container">
                 ${items}
             </div>
         </div>
     `;
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function formatearFecha(isoDate) {
-    if (!isoDate) return 'N/A';
+function formatearFecha(fechaISO) {
+    if (!fechaISO) return 'N/A';
     
-    const date = new Date(isoDate);
+    const fecha = new Date(fechaISO);
     const opciones = { 
         year: 'numeric', 
         month: 'long', 
@@ -174,25 +250,39 @@ function formatearFecha(isoDate) {
         minute: '2-digit'
     };
     
-    return date.toLocaleDateString('es-ES', opciones);
+    return fecha.toLocaleDateString('es-ES', opciones);
 }
 
-async function copiarURL(event, slug, variant) {
+function copiarURL(event, slug, variant) {
+    event.preventDefault();
+    
     const url = `https://${BASE_DOMAIN}/${slug}/${variant}`;
     
-    try {
-        await navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(url).then(() => {
+        const button = event.target;
+        const originalText = button.textContent;
         
-        // Feedback visual
-        event.target.textContent = '✓ Copiado';
-        event.target.style.background = '#27ae60';
+        button.textContent = '✓ Copiado';
+        button.style.backgroundColor = '#28a745';
         
         setTimeout(() => {
-            event.target.textContent = 'Copiar';
-            event.target.style.background = '#3498db';
+            button.textContent = originalText;
+            button.style.backgroundColor = '';
         }, 2000);
-    } catch (error) {
-        console.error('Error al copiar:', error);
-        alert('No se pudo copiar la URL. Por favor, cópiala manualmente: ' + url);
-    }
+    }).catch(err => {
+        console.error('Error al copiar:', err);
+        alert('No se pudo copiar la URL');
+    });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.toString().replace(/[&<>"']/g, m => map[m]);
 }
