@@ -43,6 +43,3 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 *.dockerignore
-
-# Ignore docker-compose.yml if you want
-docker-compose.yml
