@@ -1,8 +1,9 @@
 # services/link_service.py
 import os
 import requests
-from typing import Optional, List, Dict
 import re
+from typing import Optional, List, Dict
+from dotenv import load_dotenv
 
 
 class LinkService:
@@ -10,7 +11,10 @@ class LinkService:
     
     def __init__(self):
         """Inicializa el servicio con la URL del MS Admin"""
-        self.admin_api_url = os.getenv('ADMIN_API_URL', 'http://localhost:3000')
+        load_dotenv()
+        
+        self.admin_api_url = os.getenv('ADMIN_API_URL', 'http://localhost:8080')
+        
         # Asegurar que la URL no termine con /
         self.admin_api_url = self.admin_api_url.rstrip('/')
     
