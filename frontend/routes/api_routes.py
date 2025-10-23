@@ -31,7 +31,7 @@ def get_links():
 def create_link():
     """Crea un nuevo link"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         
         # Validar que se enviaron datos
         if not data:

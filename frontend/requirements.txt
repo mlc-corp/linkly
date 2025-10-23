@@ -1,3 +1,12 @@
 Flask
 requests
 python-dotenv
+selenium
+pytest-cov
+pytest-html
+pylint
+flake8
+black
+pytest
+coverage
+webdriver-manager
