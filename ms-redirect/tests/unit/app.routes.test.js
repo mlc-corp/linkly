@@ -4,15 +4,15 @@ import request from "supertest";
 process.env.DDB_TABLE = "TestTable";
 process.env.AWS_REGION = "us-east-1";
 
-vi.mock("../src/dynamo.js", () => {
+vi.mock("../../src/dynamo.js", () => {
   return {
     getLinkBySlug: vi.fn(),
     incrementMetrics: vi.fn().mockResolvedValue(undefined),
   };
 });
 
-import { getLinkBySlug, incrementMetrics } from "../src/dynamo.js";
-const { createApp } = await import("../src/app.js");
+import { getLinkBySlug, incrementMetrics } from "../../src/dynamo.js";
+const { createApp } = await import("../../src/app.js");
 
 describe("Rutas ms-redirect (AAA)", () => {
   let app;

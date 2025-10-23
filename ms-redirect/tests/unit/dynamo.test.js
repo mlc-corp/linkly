@@ -8,7 +8,7 @@ let getLinkBySlug;
 let incrementMetrics;
 
 beforeAll(async () => {
-  const dynamo = await import("../src/dynamo.js");
+  const dynamo = await import("../../src/dynamo.js");
   ddb = dynamo.ddb;
   getLinkBySlug = dynamo.getLinkBySlug;
   incrementMetrics = dynamo.incrementMetrics;

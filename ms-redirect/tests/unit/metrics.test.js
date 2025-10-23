@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractContextFromCFHeaders } from "../src/metrics.js";
+import { extractContextFromCFHeaders } from "../../src/metrics.js";
 
 describe("extractContextFromCFHeaders (AAA)", () => {
   it("detecta mobile y país CO (normaliza mayúsculas)", () => {
