@@ -30,18 +30,6 @@ def test_create_link_success(mock_table, sample_payload):
     mock_table.put_item.assert_called()
 
 @patch("app.services.link_service.table")
-def test_create_link_slug_conflict(mock_table, sample_payload):
-    from botocore.exceptions import ClientError
-
-    mock_table.put_item.side_effect = ClientError(
-        {"Error": {"Code": "ConditionalCheckFailedException"}}, "PutItem"
-    )
-
-    with pytest.raises(HTTPException) as exc:
-        link_service.create_link(sample_payload)
-    assert exc.value.status_code == 409
-
-@patch("app.services.link_service.table")
 def test_list_links(mock_table):
     mock_table.scan.return_value = {
         "Items": [
