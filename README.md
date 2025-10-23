@@ -4,7 +4,6 @@
 Su objetivo es ofrecer **métricas básicas** sobre los clics, como el país, el tipo de dispositivo o el canal de origen, de forma **ligera, privada y auto-hosteable**.
 
 ---
-
 ## 🚀 Objetivo
 
 Simplificar la creación y el seguimiento de enlaces personalizados.
