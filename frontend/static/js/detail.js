@@ -48,7 +48,7 @@ function mostrarContenido(link, metrics) {
                     <div class="variant-name">${escapeHtml(variant)}</div>
                     <div class="variant-url">linkly.space/${escapeHtml(link.slug)}/${escapeHtml(variant)}</div>
                 </div>
-                <button class="btn-copy" onclick="copiarURL('${escapeHtml(link.slug)}', '${escapeHtml(variant)}')">
+                <button class="btn-copy" onclick="copiarURL(event, '${escapeHtml(link.slug)}', '${escapeHtml(variant)}')">
                     Copiar
                 </button>
             </div>
@@ -176,7 +176,7 @@ function formatearFecha(isoDate) {
     return date.toLocaleDateString('es-ES', opciones);
 }
 
-async function copiarURL(slug, variant) {
+async function copiarURL(event, slug, variant) {
     const url = `https://linkly.space/${slug}/${variant}`;
     
     try {
