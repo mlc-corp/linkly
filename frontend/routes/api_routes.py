@@ -1,9 +1,17 @@
 # routes/api_routes.py
 from flask import Blueprint, request, jsonify
 from services.link_service import LinkService
+import requests
 
 api_bp = Blueprint('api', __name__)
 link_service = LinkService()
+
+
+def handle_connection_error():
+    """Maneja errores de conexión con MS Admin"""
+    return jsonify({
+        'error': 'No se pudo conectar con el servidor. Verifica que MS Admin esté ejecutándose.'
+    }), 503
 
 
 @api_bp.route('/links', methods=['GET'])
@@ -12,8 +20,11 @@ def get_links():
     try:
         links = link_service.get_all_links()
         return jsonify({'items': links}), 200
+    except requests.RequestException:
+        return handle_connection_error()
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[API] Error al obtener links: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
 
 
 @api_bp.route('/links', methods=['POST'])
@@ -22,7 +33,7 @@ def create_link():
     try:
         data = request.get_json()
         
-        # Validar datos requeridos
+        # Validar que se enviaron datos
         if not data:
             return jsonify({'error': 'No se enviaron datos'}), 400
         
@@ -39,8 +50,11 @@ def create_link():
     except ValueError as e:
         # Errores de validación
         return jsonify({'error': str(e)}), 400
+    except requests.RequestException:
+        return handle_connection_error()
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[API] Error al crear link: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
 
 
 @api_bp.route('/links/<link_id>', methods=['GET'])
@@ -54,8 +68,11 @@ def get_link(link_id):
         
         return jsonify(link), 200
         
+    except requests.RequestException:
+        return handle_connection_error()
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[API] Error al obtener link {link_id}: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
 
 
 @api_bp.route('/links/<link_id>', methods=['DELETE'])
@@ -69,8 +86,11 @@ def delete_link(link_id):
         
         return '', 204
         
+    except requests.RequestException:
+        return handle_connection_error()
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[API] Error al eliminar link {link_id}: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
 
 
 @api_bp.route('/links/<link_id>/metrics', methods=['GET'])
@@ -84,23 +104,30 @@ def get_link_metrics(link_id):
         
         return jsonify(metrics), 200
         
+    except requests.RequestException:
+        return handle_connection_error()
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[API] Error al obtener métricas de {link_id}: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
 
 
-@api_bp.route('/links/<link_id>/metrics/simulate', methods=['POST'])
-def simulate_clicks(link_id):
-    """Endpoint para simular clics (solo para desarrollo/pruebas)"""
+@api_bp.route('/health', methods=['GET'])
+def health():
+    """Health check del frontend y MS Admin"""
     try:
-        metrics = link_service.simulate_metrics(link_id)
-        
-        if not metrics:
-            return jsonify({'error': 'Link no encontrado'}), 404
+        admin_healthy = link_service.health_check()
         
         return jsonify({
-            'message': 'Métricas simuladas exitosamente',
-            'metrics': metrics
+            'ok': True,
+            'frontend': 'healthy',
+            'msAdmin': 'healthy' if admin_healthy else 'unhealthy'
         }), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"[API] Error en health check: {e}")
+        return jsonify({
+            'ok': False,
+            'frontend': 'healthy',
+            'msAdmin': 'unhealthy',
+            'error': str(e)
+        }), 503
