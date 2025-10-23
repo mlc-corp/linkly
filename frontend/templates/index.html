@@ -1,0 +1,62 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linkly - Acortador Inteligente</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 Linkly</h1>
+
+        <!-- Formulario para crear nuevo link -->
+        <div class="nuevo-link">
+            <h2>Crear Nuevo Link</h2>
+            
+            <div id="messageContainer"></div>
+
+            <form id="linkForm">
+                <div class="form-group">
+                    <label for="title">Título</label>
+                    <input type="text" id="title" placeholder="Ej: Evento 2025" required>
+                    <div class="help-text">Nombre descriptivo para identificar tu link</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="slug">Slug (URL corta)</label>
+                    <input type="text" id="slug" placeholder="Ej: evento2025" required>
+                    <div class="help-text">Solo letras, números y guiones. Será: linkly.space/tu-slug</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="destinationUrl">URL de Destino</label>
+                    <input type="url" id="destinationUrl" placeholder="https://ejemplo.com" required>
+                    <div class="help-text">La URL a la que redirigirán todas las variantes</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="variants">Variantes (opcional)</label>
+                    <textarea id="variants" class="variants-input" placeholder="ig, facebook, x, linkedin"></textarea>
+                    <div class="help-text">Canales separados por comas. Se creará automáticamente una variante "default"</div>
+                </div>
+
+                <button type="submit">Crear Link</button>
+            </form>
+        </div>
+
+        <!-- Sección de lista de links -->
+        <div class="links-section">
+            <h2>Mis Links</h2>
+            
+            <div id="linksTableContainer">
+                <div class="loading">Cargando links...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+</body>
+</html>

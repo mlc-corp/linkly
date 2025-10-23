@@ -1,0 +1,27 @@
+<!-- templates/detail.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle del Link - Linkly</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/detail.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Detalle del Link</h1>
+            <a href="/app" class="btn-back">← Volver</a>
+        </div>
+
+        <input type="hidden" id="linkIdData" value="{{ link_id }}">
+
+        <div id="contentContainer">
+            <div class="loading">Cargando información del link...</div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/detail.js') }}"></script>
+</body>
+</html>
