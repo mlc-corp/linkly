@@ -1,0 +1,28 @@
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    ports:
+      - "8000:8000"
+
+  app:
+    build:
+      context: .
+    command: node src/server.js
+    environment:
+      PORT: "8080"
+      AWS_REGION: "us-east-1"
+      DDB_TABLE: "LinklyTable"
+      DDB_ENDPOINT: "http://dynamodb:8000"
+      AWS_ACCESS_KEY_ID: fake
+      AWS_SECRET_ACCESS_KEY: fake
+    ports:
+      - "8080:8080"
+    depends_on:
+      dynamodb:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
