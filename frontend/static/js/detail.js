@@ -256,7 +256,7 @@ function formatearFecha(fechaISO) {
 function copiarURL(event, slug, variant) {
     event.preventDefault();
     
-    const url = `https://${BASE_DOMAIN}/${slug}/${variant}`;
+    const url = `${BASE_DOMAIN}/${slug}/${variant}`;
     
     navigator.clipboard.writeText(url).then(() => {
         const button = event.target;
