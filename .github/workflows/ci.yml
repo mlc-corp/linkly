@@ -79,7 +79,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/frontend
         run: |
-          pytest tests/test_app.py
+          pytest tests/unit/
 
       - name: Sonar Scan (frontend)
         uses: SonarSource/sonarqube-scan-action@v5.0.0
