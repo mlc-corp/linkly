@@ -6,3 +6,5 @@ el destino original. Utiliza los headers enviados por **CloudFront** (como país
 actualizar las métricas correspondientes en **DynamoDB**, incrementando los contadores de clics y agregados 
 por canal, país y dispositivo sin bloquear la redirección.
 
+
+
