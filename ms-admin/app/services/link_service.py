@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
