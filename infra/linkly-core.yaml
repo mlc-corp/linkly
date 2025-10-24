@@ -21,14 +21,19 @@ Parameters:
     Default: admin.linkly.space
 
 Resources:
-  ALBSg:
+  AALBSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ALB SG
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
-      Tags: [{ Key: Name, Value: !Sub linkly-${Environment}-alb-sg }]
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub 'linkly-${Environment}-alb-sg'
 
   ServicesSg:
     Type: AWS::EC2::SecurityGroup
@@ -36,22 +41,24 @@ Resources:
       GroupDescription: Services SG
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 1, ToPort: 65535, SourceSecurityGroupId: !Ref ALBSg }
-      Tags: [{ Key: Name, Value: !Sub linkly-${Environment}-services-sg }]
-
-  Cluster:
-    Type: AWS::ECS::Cluster
-    Properties:
-      ClusterName: !Sub linkly-${Environment}-cluster
+        - IpProtocol: tcp
+          FromPort: 1
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref ALBSg
+      Tags:
+        - Key: Name
+          Value: !Sub 'linkly-${Environment}-services-sg'
 
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub linkly-${Environment}-alb
+      Name: !Sub 'linkly-${Environment}-alb'
       Scheme: internet-facing
       Type: application
-      SecurityGroups: [!Ref ALBSg]
+      SecurityGroups:
+        - !Ref ALBSg
       Subnets: !Ref SubnetIds
+
 
   Listener80:
     Type: AWS::ElasticLoadBalancingV2::Listener
