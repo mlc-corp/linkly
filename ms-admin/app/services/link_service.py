@@ -109,17 +109,17 @@ def list_links():
         })
     return result
 
-def delete_link(linkId: str):
+def delete_link(link_id: str):
     """
     Borra el maestro por ID y, si existe, el alias por slug.
     """
-    item = get_item(f"LINK#{linkId}", "META")
+    item = get_item(f"LINK#{link_id}", "META")
     if not item:
         raise HTTPException(status_code=404, detail="Link not found")
 
     slug = item.get("slug")
     try:
-        delete_item(f"LINK#{linkId}", "META")
+        delete_item(f"LINK#{link_id}", "META")
         if slug:
             delete_item(f"LINK#{slug}", "META")
     except ClientError as e:

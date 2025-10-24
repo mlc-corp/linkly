@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from fastapi import HTTPException
 from types import SimpleNamespace
 from app.services import link_service, metrics_service
@@ -19,6 +19,7 @@ def sample_payload():
 # ---------------------------
 # Link Service Tests
 # ---------------------------
+
 @patch("app.services.link_service.table")
 def test_create_link_success(mock_table, sample_payload):
     mock_table.put_item.return_value = {}
@@ -28,6 +29,37 @@ def test_create_link_success(mock_table, sample_payload):
     assert result["slug"] == "test-link"
     assert result["title"] == "Test Link"
     mock_table.put_item.assert_called()
+
+def test_create_link_without_title(sample_payload):
+    sample_payload.title = ""
+    with pytest.raises(HTTPException) as exc:
+        link_service.create_link(sample_payload)
+    assert exc.value.status_code == 400
+
+@patch("app.services.link_service.table")
+def test_create_link_slug_exists(mock_table, sample_payload):
+    # Simula error de alias ya existente
+    def put_item_side_effect(*args, **kwargs):
+        if kwargs.get("ConditionExpression") == "attribute_not_exists(PK)":
+            raise link_service.ClientError(
+                {"Error": {"Code": "ConditionalCheckFailedException"}}, "PutItem"
+            )
+        return {}
+    
+    mock_table.put_item.side_effect = put_item_side_effect
+    with pytest.raises(HTTPException) as exc:
+        link_service.create_link(sample_payload)
+    assert exc.value.status_code == 409
+
+@patch("app.services.link_service.table")
+def test_create_link_client_error_meta(mock_table, sample_payload):
+    # Simula error en el maestro
+    mock_table.put_item.side_effect = link_service.ClientError(
+        {"Error": {"Code": "InternalError"}}, "PutItem"
+    )
+    with pytest.raises(HTTPException) as exc:
+        link_service.create_link(sample_payload)
+    assert exc.value.status_code == 500
 
 @patch("app.services.link_service.table")
 def test_list_links(mock_table):
@@ -41,9 +73,45 @@ def test_list_links(mock_table):
     assert len(result) == 1
     assert result[0]["slug"] == "test"
 
+@patch("app.services.link_service.table")
+def test_list_links_filtered(mock_table):
+    mock_table.scan.return_value = {
+        "Items": [
+            {"PK": "LINK#lk_123", "SK": "OTHER"},  # SK != META
+            {"PK": "LINK#lk_999", "SK": "META", "linkId": "lk_888"}  # PK != LINK#linkId
+        ]
+    }
+    result = link_service.list_links()
+    assert result == []
+
+@patch("app.services.link_service.table")
+def test_delete_link_success(mock_table):
+    mock_table.get_item.return_value = {"linkId": "lk_123", "slug": "test"}
+    mock_table.delete_item.return_value = {}
+    link_service.delete_link("lk_123")
+    assert mock_table.delete_item.call_count == 2
+
+@patch("app.services.link_service.table")
+def test_delete_link_not_found(mock_table):
+    mock_table.get_item.return_value = None
+    with pytest.raises(HTTPException) as exc:
+        link_service.delete_link("lk_123")
+    assert exc.value.status_code == 404
+
+@patch("app.services.link_service.table")
+def test_delete_link_client_error(mock_table):
+    mock_table.get_item.return_value = {"linkId": "lk_123", "slug": "test"}
+    mock_table.delete_item.side_effect = link_service.ClientError(
+        {"Error": {"Code": "InternalError"}}, "DeleteItem"
+    )
+    with pytest.raises(HTTPException) as exc:
+        link_service.delete_link("lk_123")
+    assert exc.value.status_code == 500
+
 # ---------------------------
 # Metrics Service Tests
 # ---------------------------
+
 @patch("app.services.metrics_service.table")
 def test_get_link_by_id_success(mock_table):
     mock_table.get_item.return_value = {"Item": {"linkId": "lk_123", "slug": "test", "variants": ["default"]}}
