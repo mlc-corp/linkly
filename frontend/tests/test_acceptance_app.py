@@ -72,15 +72,14 @@ def test_link_appears_in_list(browser):
 
     # Esperar dinámicamente hasta que el slug "evento2025test" aparezca en el DOM
     try:
-        WebDriverWait(browser, 10).until(
+        text_found = WebDriverWait(browser, 10).until(
             EC.text_to_be_present_in_element(
                 (By.ID, "linksTableContainer"),
                 "evento2025test"
             )
         )
-        assert True  # Si llegamos aquí, el texto apareció
+        assert text_found, "El texto 'evento2025test' no apareció en el DOM."
     except TimeoutException:
-        # Guardar el HTML para debug rápido
         html = browser.page_source
         print("\n[DEBUG] Contenido actual del linksTableContainer:\n", html[:500])
         pytest.fail("El nuevo link no aparece en la lista de links (timeout esperando que JS lo renderice).")
