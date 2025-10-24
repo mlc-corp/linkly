@@ -19,5 +19,5 @@ ENV PYTHONPATH=/app:/app/app
 # Expone el puerto interno por defecto (informativo)
 EXPOSE 8080
 
-# Inicia el servidor leyendo el puerto de $PORT o usando 8080 por defecto
+# Inicia el servidor leyendo el puerto de $PORT o usando 8080 por defecto   
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --log-level info"]

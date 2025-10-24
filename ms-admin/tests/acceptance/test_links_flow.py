@@ -9,7 +9,11 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.db.dynamo import table
 
-client = TestClient(app)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
+# --- Base URL configurable ---
+BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:5000")
+client = TestClient(app, base_url=BASE_URL)
 
 @pytest.fixture
 def link_payload():
@@ -33,7 +37,7 @@ def wait_for_table_ready(timeout: int = 10):
         resp = requests.get(endpoint_url, timeout=2)
         print(f"DynamoDB endpoint activo: {endpoint_url} (status {resp.status_code})")
     except Exception as e:
-        pytest.fail(f"❌ No se pudo conectar al endpoint {endpoint_url}: {e}")
+        pytest.fail(f"No se pudo conectar al endpoint {endpoint_url}: {e}")
 
     # --- Esperar a que la tabla esté lista ---
     for _ in range(timeout):
@@ -49,7 +53,7 @@ def test_links_endpoints_e2e(link_payload):
     wait_for_table_ready()
 
     # --- Crear link ---
-    response = client.post("/links", json=link_payload)
+    response = client.post(f"{BASE_URL}/links", json=link_payload)
     assert response.status_code == 201, response.text
     created = response.json()
     link_id = created["linkId"]
@@ -65,27 +69,27 @@ def test_links_endpoints_e2e(link_payload):
     assert item["title"] == link_payload["title"]
 
     # --- Listar links ---
-    response = client.get("/links")
+    response = client.get(f"{BASE_URL}/links")
     assert response.status_code == 200
     items = response.json()["items"]
     assert any(i["linkId"] == link_id for i in items)
 
     # --- Obtener link ---
-    response = client.get(f"/links/{link_id}")
+    response = client.get(f"{BASE_URL}/links/{link_id}")
     assert response.status_code == 200
     item = response.json()
     assert item["linkId"] == link_id
 
     # --- Obtener métricas ---
-    response = client.get(f"/links/{link_id}/metrics")
+    response = client.get(f"{BASE_URL}/links/{link_id}/metrics")
     assert response.status_code == 200
     metrics = response.json()
     assert metrics["slug"] == expected_slug
 
     # --- Borrar link ---
-    response = client.delete(f"/links/{link_id}")
+    response = client.delete(f"{BASE_URL}/links/{link_id}")
     assert response.status_code == 204
 
     # --- Confirmar que se eliminó ---
-    response = client.get(f"/links/{link_id}")
+    response = client.get(f"{BASE_URL}/links/{link_id}")
     assert response.status_code == 404
