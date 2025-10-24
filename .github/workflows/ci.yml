@@ -45,7 +45,7 @@ jobs:
               - 'ms-redirect/**'
             # No listamos infra/README para que NO disparen tests
 
-  # 2) Pruebas unitarias — frontend (Python)
+  # 2) Pruebas unitarias — frontend (Python) + Sonar
   test-frontend:
     name: Pruebas unitarias · frontend
     needs: changed
@@ -73,15 +73,22 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
           elif [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          python -m pip install -U pytest
+          python -m pip install -U pytest pytest-cov
 
-      - name: Run unit tests
+      - name: Run unit tests (con coverage para Sonar)
         env:
           PYTHONPATH: ${{ github.workspace }}/frontend
         run: |
-          pytest -q ./tests/test_app.py
+          pytest tests/test_app.py
 
-  # 3) Pruebas unitarias — ms-admin (Python)
+      - name: Sonar Scan (frontend)
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # provisto por GitHub
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # tu secreto
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # ej: https://sonarcloud.io o tu SonarQube
+
+  # 3) Pruebas unitarias — ms-admin (Python) + Sonar
   test-ms-admin:
     name: Pruebas unitarias · ms-admin
     needs: changed
@@ -109,15 +116,22 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
           elif [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          python -m pip install -U pytest
+          python -m pip install -U pytest pytest-cov
 
-      - name: Run unit tests
+      - name: Run unit tests (con coverage para Sonar)
         env:
-          PYTHONPATH: ${{ github.workspace }}/ms-admin
+          PYTHONPATH: ${{ github.workspace }}/ms-admin}
         run: |
-          python -m pytest -v ./tests/unit/
+          pytest tests/unit/
 
-  # 4) Pruebas unitarias — ms-redirect (Node / Vitest)
+      - name: Sonar Scan (ms-admin)
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  # 4) Pruebas unitarias — ms-redirect (Node / Vitest) + Sonar
   test-ms-redirect:
     name: Pruebas unitarias · ms-redirect
     needs: changed
@@ -141,6 +155,17 @@ jobs:
 
       - name: Run unit tests (vitest)
         run: npm test --silent -- tests/unit
+
+      - name: Run coverage (lcov) para Sonar
+        run: |
+          npm run coverage
+
+      - name: Sonar Scan (ms-redirect)
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
   # 5) Mensaje si no hay nada que probar
   nothing-to-test:
