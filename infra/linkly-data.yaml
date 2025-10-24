@@ -11,16 +11,22 @@ Resources:
   LinklyTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub LinklyTable-${Environment}
+      TableName: !Sub 'LinklyTable-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - { AttributeName: PK, AttributeType: S }
-        - { AttributeName: SK, AttributeType: S }
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
       KeySchema:
-        - { AttributeName: PK, KeyType: HASH }
-        - { AttributeName: SK, KeyType: RANGE }
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
 
 Outputs:
   TableName:
+    Description: Nombre de la tabla DynamoDB
     Value: !Ref LinklyTable
-    Export: { Name: !Sub linkly-${Environment}-DynamoTable }
+    Export:
+      Name: !Sub 'linkly-${Environment}-DynamoTable'
