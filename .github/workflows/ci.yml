@@ -2,7 +2,7 @@ name: Monorepo CI (unit tests only)
 
 on:
   push:
-    branches: [ '*' ]
+    branches: [ '**' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
