@@ -12,8 +12,8 @@ if not DDB_TABLE:
     sys.exit(1)
 
 session = boto3.Session(
-    aws_access_key_id="dummy",
-    aws_secret_access_key="dummy",
+    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
     region_name=AWS_REGION,
 )
 config = Config(region_name=AWS_REGION)
