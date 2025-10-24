@@ -1,4 +1,4 @@
-name: CD — Producción AWS ECS (sin CloudFront)
+name: CD — Producción AWS ECS (solo prod)
 
 on:
   workflow_dispatch:
@@ -14,47 +14,37 @@ env:
 jobs:
   deploy-prod:
     runs-on: ubuntu-latest
+
     steps:
-      # -----------------------------------------
-      # 1. Checkout del código fuente
-      # -----------------------------------------
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # -----------------------------------------
-      # 2. Configurar credenciales iniciales (VocLabs)
-      #    Solo para poder asumir el rol LabRole
-      # -----------------------------------------
-      - name: Configure base AWS credentials (VocLabs)
+      # Usamos credenciales base de VocLabs y asumimos el LabRole para todo el deploy
+      - name: Configure AWS (assume LabRole)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
+          role-to-assume:        ${{ secrets.LAB_ROLE_ARN }}
+          role-session-name:     linkly-prod-deploy
           aws-region:            ${{ env.AWS_REGION }}
 
-      # -----------------------------------------
-      # 3. Asumir el LabRole para obtener permisos reales
-      # -----------------------------------------
-      - name: Assume LabRole (obtain temporary credentials)
-        id: assume
+      # (Opcional) limpiar si quedó en ROLLBACK_COMPLETE
+      - name: Preflight — core
         run: |
           set -euo pipefail
-          echo "Assuming LabRole: ${{ secrets.LAB_ROLE_ARN }}"
-          CREDS=$(aws sts assume-role \
-            --role-arn "${{ secrets.LAB_ROLE_ARN }}" \
-            --role-session-name "linkly-prod-deploy")
-          echo "AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.Credentials.AccessKeyId')" >> $GITHUB_ENV
-          echo "AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.Credentials.SecretAccessKey')" >> $GITHUB_ENV
-          echo "AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Credentials.SessionToken')" >> $GITHUB_ENV
+          STACK="linkly-production-core"
+          STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+            --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NONE")
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            aws cloudformation delete-stack --stack-name "$STACK"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK"
+          fi
 
-      # -----------------------------------------
-      # 4. Deploy Core Stack (ALB + SG + Networking)
-      # -----------------------------------------
-      - name: Deploy Core (prod)
+      - name: Deploy Core (ALB + SG)
         run: |
           set -euo pipefail
-          echo "🚀 Deploying core infra for production..."
           aws cloudformation deploy \
             --template-file infra/linkly-core-prod.yaml \
             --stack-name linkly-production-core \
@@ -67,26 +57,40 @@ jobs:
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
-      # -----------------------------------------
-      # 5. Deploy Data Stack (DynamoDB)
-      # -----------------------------------------
-      - name: Deploy Data (prod)
+      - name: Preflight — data
         run: |
           set -euo pipefail
-          echo "📦 Deploying DynamoDB table..."
+          STACK="linkly-production-data"
+          STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+            --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NONE")
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            aws cloudformation delete-stack --stack-name "$STACK"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK"
+          fi
+
+      - name: Deploy Data (DynamoDB)
+        run: |
+          set -euo pipefail
           aws cloudformation deploy \
             --template-file infra/linkly-data-prod.yaml \
             --stack-name linkly-production-data \
             --parameter-overrides Environment=production \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
-      # -----------------------------------------
-      # 6. Deploy ECS Services (Frontend, Admin, Redirect)
-      # -----------------------------------------
-      - name: Deploy ECS Services (prod)
+      - name: Preflight — ecs
         run: |
           set -euo pipefail
-          echo "🐳 Deploying ECS services..."
+          STACK="linkly-production-ecs"
+          STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+            --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NONE")
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            aws cloudformation delete-stack --stack-name "$STACK"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK"
+          fi
+
+      - name: Deploy ECS Services (frontend, admin, redirect)
+        run: |
+          set -euo pipefail
           aws cloudformation deploy \
             --template-file infra/linkly-ecs-services-prod.yaml \
             --stack-name linkly-production-ecs \
@@ -99,16 +103,12 @@ jobs:
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
-      # -----------------------------------------
-      # 7. Obtener y mostrar la URL pública del ALB
-      # -----------------------------------------
-      - name: Show ALB URL (prod)
+      - name: Mostrar URL pública (ALB)
         run: |
           set -euo pipefail
-          echo "🌍 Fetching ALB URL..."
           ALB_URL=$(aws cloudformation describe-stacks \
             --stack-name linkly-production-core \
             --query "Stacks[0].Outputs[?OutputKey=='ALBDnsName'].OutputValue" \
             --output text)
-          echo "✅ Producción desplegada correctamente:"
+          echo "✅ Producción lista:"
           echo "🔗 http://$ALB_URL"
