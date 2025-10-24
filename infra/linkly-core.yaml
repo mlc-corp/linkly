@@ -21,7 +21,7 @@ Parameters:
     Default: admin.linkly.space
 
 Resources:
-  AALBSg:
+  ALBSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ALB SG
@@ -49,6 +49,11 @@ Resources:
         - Key: Name
           Value: !Sub 'linkly-${Environment}-services-sg'
 
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'linkly-${Environment}-cluster'
+
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -59,7 +64,6 @@ Resources:
         - !Ref ALBSg
       Subnets: !Ref SubnetIds
 
-
   Listener80:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -68,12 +72,13 @@ Resources:
       Protocol: HTTP
       DefaultActions:
         - Type: fixed-response
-          FixedResponseConfig: { StatusCode: '404' }
+          FixedResponseConfig:
+            StatusCode: '404'
 
   TgFrontend:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub tg-frontend-${Environment}
+      Name: !Sub 'tg-frontend-${Environment}'
       VpcId: !Ref VpcId
       Protocol: HTTP
       Port: 5000
@@ -83,7 +88,7 @@ Resources:
   TgAdmin:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub tg-admin-${Environment}
+      Name: !Sub 'tg-admin-${Environment}'
       VpcId: !Ref VpcId
       Protocol: HTTP
       Port: 8080
@@ -93,7 +98,7 @@ Resources:
   TgRedirect:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub tg-redirect-${Environment}
+      Name: !Sub 'tg-redirect-${Environment}'
       VpcId: !Ref VpcId
       Protocol: HTTP
       Port: 8080
@@ -107,7 +112,9 @@ Resources:
       Priority: 10
       Conditions:
         - Field: host-header
-          HostHeaderConfig: { Values: [!Ref AppDomain] }
+          HostHeaderConfig:
+            Values:
+              - !Ref AppDomain
       Actions:
         - Type: forward
           TargetGroupArn: !Ref TgFrontend
@@ -119,7 +126,9 @@ Resources:
       Priority: 20
       Conditions:
         - Field: host-header
-          HostHeaderConfig: { Values: [!Ref AdminDomain] }
+          HostHeaderConfig:
+            Values:
+              - !Ref AdminDomain
       Actions:
         - Type: forward
           TargetGroupArn: !Ref TgAdmin
@@ -131,35 +140,49 @@ Resources:
       Priority: 30
       Conditions:
         - Field: host-header
-          HostHeaderConfig: { Values: [!Ref RootDomain] }
+          HostHeaderConfig:
+            Values:
+              - !Ref RootDomain
       Actions:
         - Type: forward
           TargetGroupArn: !Ref TgRedirect
 
 Outputs:
   ClusterName:
+    Description: Nombre del ECS Cluster
     Value: !Ref Cluster
-    Export: { Name: !Sub linkly-${Environment}-Cluster }
+    Export:
+      Name: !Sub 'linkly-${Environment}-Cluster'
 
   ALBDnsName:
+    Description: DNS del ALB
     Value: !GetAtt ALB.DNSName
-    Export: { Name: !Sub linkly-${Environment}-ALBDnsName }
+    Export:
+      Name: !Sub 'linkly-${Environment}-ALBDnsName'
 
   ServicesSgId:
+    Description: SG de los servicios
     Value: !Ref ServicesSg
-    Export: { Name: !Sub linkly-${Environment}-ServicesSg }
+    Export:
+      Name: !Sub 'linkly-${Environment}-ServicesSg'
 
   PublicSubnetsCsv:
-    Description: Passthrough de las subnets para importarlas en ECS Services
-    Value: !Join [",", !Ref SubnetIds]
-    Export: { Name: !Sub linkly-${Environment}-PublicSubnets }
+    Description: Subnets usadas por el ALB (CSV)
+    Value: !Join [ ",", !Ref SubnetIds ]
+    Export:
+      Name: !Sub 'linkly-${Environment}-PublicSubnets'
 
   TgFrontendArn:
     Value: !Ref TgFrontend
-    Export: { Name: !Sub linkly-${Environment}-TgFrontend }
+    Export:
+      Name: !Sub 'linkly-${Environment}-TgFrontend'
+
   TgAdminArn:
     Value: !Ref TgAdmin
-    Export: { Name: !Sub linkly-${Environment}-TgAdmin }
+    Export:
+      Name: !Sub 'linkly-${Environment}-TgAdmin'
+
   TgRedirectArn:
     Value: !Ref TgRedirect
-    Export: { Name: !Sub linkly-${Environment}-TgRedirect }
+    Export:
+      Name: !Sub 'linkly-${Environment}-TgRedirect'
