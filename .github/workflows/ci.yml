@@ -31,6 +31,11 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v3
         with:
+          # En push: compara HEAD vs commit anterior en la misma rama
+          # En PR: usa el merge-base PR vs rama base (comportamiento por defecto)
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
+          ref:  ${{ github.event_name == 'push' && github.sha || '' }}
+
           filters: |
             frontend:
               - 'frontend/**'
@@ -74,7 +79,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/frontend
         run: |
-          python -m pytest -v ./tests/unit/
+          pytest -q ./tests/test_app.py
 
   # 3) Pruebas unitarias — ms-admin (Python)
   test-ms-admin:
