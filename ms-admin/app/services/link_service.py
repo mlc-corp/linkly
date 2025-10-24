@@ -26,7 +26,7 @@ def create_link(payload):
 
     slug = payload.slug or payload.title.lower().strip().replace(" ", "-")
     link_id = gen_link_id()
-    created_at = datetime.utcnow().isoformat() + "Z"
+    created_at = datetime.now(timezone.utc).isoformat()
 
     # normaliza variants
     variants = payload.variants or ["default"]

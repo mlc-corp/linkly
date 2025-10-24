@@ -5,26 +5,31 @@ from app.services.metrics_service import get_link_metrics
 
 router = APIRouter(prefix="/links", tags=["Links"])
 
+
 @router.post("", response_model=LinkOut, status_code=status.HTTP_201_CREATED)
 def create_link_endpoint(payload: LinkCreate):
     return create_link(payload)
+
 
 @router.get("")
 def list_links_endpoint():
     return {"items": list_links()}
 
-@router.get("/{linkId}")
-def get_link_endpoint(linkId: str):
-    item = get_item(f"LINK#{linkId}", "META")
+
+@router.get("/{link_id}")
+def get_link_endpoint(link_id: str):
+    item = get_item(f"LINK#{link_id}", "META")
     if not item:
         return Response(status_code=404)
     return item
 
-@router.delete("/{linkId}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_link_endpoint(linkId: str):
-    delete_link(linkId)
+
+@router.delete("/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_link_endpoint(link_id: str):
+    delete_link(link_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@router.get("/{linkId}/metrics")
-def get_metrics_endpoint(linkId: str):
-    return get_link_metrics(linkId)
+
+@router.get("/{link_id}/metrics")
+def get_metrics_endpoint(link_id: str):
+    return get_link_metrics(link_id)

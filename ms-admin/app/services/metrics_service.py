@@ -7,7 +7,6 @@ def _sum_maps(dst: dict, src: dict | None):
         dst[k] = dst.get(k, 0) + int(v)
 
 def _variant_from_pk(pk: str) -> str:
-    # PK = "METRIC#<slug>#<variant>"
     parts = pk.split("#", 2)
     return parts[2] if len(parts) == 3 else "default"
 
