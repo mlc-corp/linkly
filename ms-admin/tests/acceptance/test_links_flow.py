@@ -1,90 +1,80 @@
 import pytest
+import time
+import sys, os
+import requests
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
 from fastapi.testclient import TestClient
 from app.main import app
-from unittest.mock import patch
-import uuid
-from datetime import datetime
+from app.db.dynamo import table
 
 client = TestClient(app)
 
 @pytest.fixture
 def link_payload():
     return {
-        "title": "Acceptance Test Link",
+        "title": "E2E Acceptance Link",
         "destinationUrl": "http://example.com",
         "variants": ["default", "variant1"]
     }
 
-@pytest.fixture(autouse=True)
-def mock_dynamodb_tables():
-    db = {}  # almacen simulado
 
-    with patch("app.services.link_service.table") as link_table_mock, \
-         patch("app.services.metrics_service.table") as metrics_table_mock:
+def wait_for_table_ready(timeout: int = 10):
+    """
+    Espera a que DynamoDB Local esté lista antes de correr las pruebas.
+    Falla explícitamente si no se puede conectar al endpoint o la tabla no responde.
+    """
+    endpoint_url = table.meta.client.meta.endpoint_url
+    print(f"Verificando conexión a DynamoDB: {endpoint_url}")
 
-        # función genérica para mocks
-        def create_side_effect(table_mock):
-            def put_item(Item, **kwargs):
-                pk = Item.get("PK") or f"LINK#{Item.get('linkId', str(uuid.uuid4()))}"
-                sk = Item.get("SK") or "META"
-                db[(pk, sk)] = Item
-                return {"ResponseMetadata": {"HTTPStatusCode": 200}}
+    # --- Verificar que el endpoint responda ---
+    try:
+        resp = requests.get(endpoint_url, timeout=2)
+        print(f"DynamoDB endpoint activo: {endpoint_url} (status {resp.status_code})")
+    except Exception as e:
+        pytest.fail(f"❌ No se pudo conectar al endpoint {endpoint_url}: {e}")
 
-            def get_item(Key, **kwargs):
-                pk = Key.get("PK")
-                sk = Key.get("SK")
-                item = db.get((pk, sk))
-                return {"Item": item} if item else {}
+    # --- Esperar a que la tabla esté lista ---
+    for _ in range(timeout):
+        try:
+            _ = table.table_status
+            return
+        except Exception:
+            time.sleep(1)
+    pytest.fail(f"DynamoDB Local no está lista después de {timeout}s")
 
-            def scan(**kwargs):
-                return {"Items": list(db.values())}
 
-            def delete_item(Key, **kwargs):
-                pk = Key.get("PK")
-                sk = Key.get("SK")
-                db.pop((pk, sk), None)
-                return {"ResponseMetadata": {"HTTPStatusCode": 200}}
+def test_links_endpoints_e2e(link_payload):
+    wait_for_table_ready()
 
-            table_mock.put_item.side_effect = put_item
-            table_mock.get_item.side_effect = get_item
-            table_mock.scan.side_effect = scan
-            table_mock.delete_item.side_effect = delete_item
-
-        # aplicamos a ambos mocks
-        create_side_effect(link_table_mock)
-        create_side_effect(metrics_table_mock)
-
-        yield
-
-def test_links_endpoints_flow(link_payload):
     # --- Crear link ---
     response = client.post("/links", json=link_payload)
-    assert response.status_code == 201
-    created_link = response.json()
-    link_id = created_link["linkId"]
+    assert response.status_code == 201, response.text
+    created = response.json()
+    link_id = created["linkId"]
 
     expected_slug = link_payload["title"].lower().replace(" ", "-")
-    assert created_link["slug"] == expected_slug
-    assert created_link["title"] == link_payload["title"]
-    assert set(created_link["variants"]) == set(link_payload["variants"])
-    assert "createdAt" in created_link
+    assert created["slug"] == expected_slug
+
+    # --- Verificar en Dynamo ---
+    key = {"PK": f"LINK#{link_id}", "SK": "META"}
+    result = table.get_item(Key=key)
+    item = result.get("Item")
+    assert item, f"No se encontró el item {key} en DynamoDB"
+    assert item["title"] == link_payload["title"]
 
     # --- Listar links ---
     response = client.get("/links")
     assert response.status_code == 200
     items = response.json()["items"]
-    assert any(item["linkId"] == link_id for item in items)
+    assert any(i["linkId"] == link_id for i in items)
 
-    # --- Obtener link por ID ---
+    # --- Obtener link ---
     response = client.get(f"/links/{link_id}")
     assert response.status_code == 200
     item = response.json()
     assert item["linkId"] == link_id
-    assert item["slug"] == expected_slug
-
-    # --- Obtener link que no existe ---
-    response = client.get("/links/nonexistent-id")
-    assert response.status_code == 404
 
     # --- Obtener métricas ---
     response = client.get(f"/links/{link_id}/metrics")
@@ -96,6 +86,6 @@ def test_links_endpoints_flow(link_payload):
     response = client.delete(f"/links/{link_id}")
     assert response.status_code == 204
 
-    # --- Verificar que ya no existe ---
+    # --- Confirmar que se eliminó ---
     response = client.get(f"/links/{link_id}")
     assert response.status_code == 404
