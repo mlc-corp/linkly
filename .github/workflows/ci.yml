@@ -1,0 +1,188 @@
+name: CI monorepo — Pruebas unitarias
+
+on:
+  push:
+    branches: ['**']     # cualquier rama (incluye feature/x)
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Evita carreras si hay múltiples pushes a la misma rama/PR
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # 1) Detectar qué carpetas cambiaron
+  changed:
+    name: Detectar cambios
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      ms_admin: ${{ steps.filter.outputs.ms_admin }}
+      ms_redirect: ${{ steps.filter.outputs.ms_redirect }}
+    steps:
+      - name: Checkout (full history for diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # <-- necesario para que paths-filter compare contra el historial
+
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # En push: compara HEAD vs commit anterior en la misma rama
+          # En PR: usa el merge-base PR vs rama base (comportamiento por defecto)
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
+          ref:  ${{ github.event_name == 'push' && github.sha || '' }}
+
+          filters: |
+            frontend:
+              - 'frontend/**'
+            ms_admin:
+              - 'ms-admin/**'
+            ms_redirect:
+              - 'ms-redirect/**'
+            # No listamos infra/README para que NO disparen tests
+
+  # 2) Pruebas unitarias — frontend (Python) + Sonar
+  test-frontend:
+    name: Pruebas unitarias · frontend
+    needs: changed
+    if: needs.changed.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            frontend/requirements.txt
+            frontend/requirements-dev.txt
+            frontend/pyproject.toml
+            frontend/setup.cfg
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
+          elif [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m pip install -U pytest pytest-cov
+
+      - name: Run unit tests (con coverage para Sonar)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/frontend
+        run: |
+          pytest tests/test_app.py
+
+      - name: Sonar Scan (frontend)
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # provisto por GitHub
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # tu secreto
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # ej: https://sonarcloud.io o tu SonarQube
+        with:
+          args: >
+            -Dsonar.projectBaseDir=${{ github.workspace }}/frontend
+
+  # 3) Pruebas unitarias — ms-admin (Python) + Sonar
+  test-ms-admin:
+    name: Pruebas unitarias · ms-admin
+    needs: changed
+    if: needs.changed.outputs.ms_admin == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ms-admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            ms-admin/requirements.txt
+            ms-admin/requirements-dev.txt
+            ms-admin/pyproject.toml
+            ms-admin/setup.cfg
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
+          elif [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m pip install -U pytest pytest-cov
+
+      - name: Run unit tests (con coverage para Sonar)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/ms-admin}
+        run: |
+          pytest tests/unit/
+
+      - name: Sonar Scan (ms-admin)
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectBaseDir=${{ github.workspace }}/ms-admin
+
+  # 4) Pruebas unitarias — ms-redirect (Node / Vitest) + Sonar
+  test-ms-redirect:
+    name: Pruebas unitarias · ms-redirect
+    needs: changed
+    if: needs.changed.outputs.ms_redirect == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ms-redirect
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ms-redirect/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run unit tests (vitest)
+        run: npm test --silent -- tests/unit
+
+      - name: Run coverage (lcov) para Sonar
+        run: |
+          npm run coverage
+
+      - name: Sonar Scan (ms-redirect)
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectBaseDir=${{ github.workspace }}/ms-redirect
+
+  # 5) Mensaje si no hay nada que probar
+  nothing-to-test:
+    name: Pruebas unitarias · nada que ejecutar
+    needs: changed
+    if: needs.changed.outputs.frontend != 'true' &&
+        needs.changed.outputs.ms_admin != 'true' &&
+        needs.changed.outputs.ms_redirect != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "No changed projects. Skipping unit tests."

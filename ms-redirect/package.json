@@ -9,7 +9,7 @@
     "start": "node src/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage.enabled true --coverage.reporter lcov",
 
     "e2e:up": "docker compose -f docker-compose.e2e.yml up -d --build",
     "e2e:wait": "bash -lc 'for i in {1..30}; do curl -fsS http://localhost:8080/health && exit 0; sleep 1; done; echo timeout && exit 1'",
