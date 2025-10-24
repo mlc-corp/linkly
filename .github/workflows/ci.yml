@@ -87,7 +87,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.13'
           cache: 'pip'
           cache-dependency-path: |
             ms-admin/requirements.txt
@@ -102,7 +102,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest -q tests/unit
+          python -m pytest -v ./tests/unit/
 
   # 4) Tests Node - ms-redirect
   test-ms-redirect:
