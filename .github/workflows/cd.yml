@@ -14,10 +14,15 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -27,6 +32,7 @@ jobs:
       # ---------- STAGING ----------
       - name: Core (staging)
         run: |
+          set -euo pipefail
           aws cloudformation deploy \
             --template-file infra/linkly-core.yaml \
             --stack-name linkly-staging-core \
@@ -37,18 +43,22 @@ jobs:
               RootDomain=${{ env.ROOT_DOMAIN }} \
               AppDomain=${{ env.APP_DOMAIN }} \
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changes
 
       - name: Data (staging)
         run: |
+          set -euo pipefail
           aws cloudformation deploy \
             --template-file infra/linkly-data.yaml \
             --stack-name linkly-staging-data \
             --parameter-overrides Environment=staging \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changes
 
       - name: ECS Services (staging)
         run: |
+          set -euo pipefail
           aws cloudformation deploy \
             --template-file infra/linkly-ecs-services.yaml \
             --stack-name linkly-staging-ecs \
@@ -59,11 +69,13 @@ jobs:
               RootDomain=${{ env.ROOT_DOMAIN }} \
               AppDomain=${{ env.APP_DOMAIN }} \
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changes
 
       # ---------- PRODUCTION ----------
       - name: Core (prod)
         run: |
+          set -euo pipefail
           aws cloudformation deploy \
             --template-file infra/linkly-core.yaml \
             --stack-name linkly-production-core \
@@ -74,18 +86,22 @@ jobs:
               RootDomain=${{ env.ROOT_DOMAIN }} \
               AppDomain=${{ env.APP_DOMAIN }} \
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changes
 
       - name: Data (prod)
         run: |
+          set -euo pipefail
           aws cloudformation deploy \
             --template-file infra/linkly-data.yaml \
             --stack-name linkly-production-data \
             --parameter-overrides Environment=production \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changes
 
       - name: ECS Services (prod)
         run: |
+          set -euo pipefail
           aws cloudformation deploy \
             --template-file infra/linkly-ecs-services.yaml \
             --stack-name linkly-production-ecs \
@@ -96,10 +112,12 @@ jobs:
               RootDomain=${{ env.ROOT_DOMAIN }} \
               AppDomain=${{ env.APP_DOMAIN }} \
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changes
 
       - name: CloudFront (prod)
         run: |
+          set -euo pipefail
           aws cloudformation deploy \
             --template-file infra/linkly-cloudfront-prod.yaml \
             --stack-name linkly-production-cf \
@@ -109,4 +127,5 @@ jobs:
               AppDomain=${{ env.APP_DOMAIN }} \
               CertificateArnRoot=${{ secrets.ACM_ARN_ROOT }} \
               CertificateArnApp=${{ secrets.ACM_ARN_APP }} \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changes
