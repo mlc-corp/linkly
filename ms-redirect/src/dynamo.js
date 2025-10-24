@@ -39,54 +39,30 @@ export async function getLinkBySlug(slug) {
   return { destinationUrl: Item.destinationUrl };
 }
 
-async function initMetricIfAbsent(slug, variant = "default") {
-  try {
-    await ddb.send(
-      new UpdateCommand({
-        TableName: DDB_TABLE,
-        Key: { PK: `METRIC#${slug}#${variant}`, SK: "TOTAL" },
-        ConditionExpression: "attribute_not_exists(PK)",
-        UpdateExpression:
-          "SET byCountry = :empty, byDevice = :empty, clicks = if_not_exists(clicks, :zero)",
-        ExpressionAttributeValues: {
-          ":empty": {},
-          ":zero": 0,
-        },
-      })
-    );
-  } catch (err) {
-    if (err?.name !== "ConditionalCheckFailedException") throw err;
-  }
-}
-
 export async function incrementMetrics({
   slug,
   variant = "default",
   country = "UN",
   device = "unknown",
 }) {
-  const c = country.toUpperCase();
-  const d = device;
+  const c = (country || "UN").toUpperCase();
+  const d = device || "unknown";
 
-  const doUpdate = () =>
-    ddb.send(
-      new UpdateCommand({
-        TableName: DDB_TABLE,
-        Key: { PK: `METRIC#${slug}#${variant}`, SK: "TOTAL" },
-        UpdateExpression:
-          "SET byCountry.#c = if_not_exists(byCountry.#c, :zero) + :one, " +
-          "    byDevice.#d  = if_not_exists(byDevice.#d,  :zero) + :one " +
+  await ddb.send(
+    new UpdateCommand({
+      TableName: DDB_TABLE,
+      Key: { PK: `METRIC#${slug}#${variant}`, SK: "TOTAL" },
+      UpdateExpression:
+        [
+          "SET byCountry = if_not_exists(byCountry, :empty)",
+          "    , byDevice = if_not_exists(byDevice, :empty)",
+          "    , byCountry.#c = if_not_exists(byCountry.#c, :zero) + :one",
+          "    , byDevice.#d  = if_not_exists(byDevice.#d,  :zero) + :one",
           "ADD clicks :one",
-        ExpressionAttributeNames: { "#c": c, "#d": d },
-        ExpressionAttributeValues: { ":one": 1, ":zero": 0 },
-        ReturnValues: "NONE",
-      })
-    );
-
-  try {
-    await doUpdate();
-  } catch (err) {
-    await initMetricIfAbsent(slug, variant);
-    await doUpdate();
-  }
+        ].join(" "),
+      ExpressionAttributeNames: { "#c": c, "#d": d },
+      ExpressionAttributeValues: { ":one": 1, ":zero": 0, ":empty": {} },
+      ReturnValues: "NONE",
+    })
+  );
 }

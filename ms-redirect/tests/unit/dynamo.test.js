@@ -52,7 +52,7 @@ describe("dynamo.js (AAA)", () => {
     expect(result).toEqual({ destinationUrl: "https://x.com" });
   });
 
-  it("incrementMetrics => UPDATE directo cuando la fila existe", async () => {
+  it("incrementMetrics => hace un único UPDATE con los parámetros indicados", async () => {
     // Arrange
     const sendSpy = vi.spyOn(ddb, "send").mockResolvedValueOnce({}); // UPDATE ok
 
@@ -66,30 +66,34 @@ describe("dynamo.js (AAA)", () => {
 
     // Assert
     expect(sendSpy).toHaveBeenCalledTimes(1);
+
+    const cmd = sendSpy.mock.calls[0][0]; // UpdateCommand
+    // Verifica la clave y nombres calculados
+    expect(cmd.input.TableName).toBe("TestTable");
+    expect(cmd.input.Key).toEqual({ PK: "METRIC#promo#B", SK: "TOTAL" });
+    expect(cmd.input.ExpressionAttributeNames).toEqual({ "#c": "CO", "#d": "mobile" });
+    expect(cmd.input.ExpressionAttributeValues).toMatchObject({ ":one": 1, ":zero": 0 });
+    expect(cmd.input.UpdateExpression).toContain("ADD clicks :one");
+    // Asegura que inicializa mapas si no existen
+    expect(cmd.input.UpdateExpression).toContain("byCountry = if_not_exists(byCountry, :empty)");
+    expect(cmd.input.UpdateExpression).toContain("byDevice = if_not_exists(byDevice, :empty)");
   });
 
-  it("incrementMetrics => inicializa y reintenta si falla la primera vez", async () => {
+  it("incrementMetrics => usa defaults (variant=default, country=UN, device=unknown)", async () => {
     // Arrange
-    const firstError = new Error("no existe");
-    firstError.name = "ConditionalCheckFailedException";
-    const sendSpy = vi.spyOn(ddb, "send");
-
-    // 1) Primer UPDATE falla (fila inexistente)
-    sendSpy.mockRejectedValueOnce(firstError);
-    // 2) initMetricIfAbsent (UPDATE con ConditionExpression) resuelve ok
-    sendSpy.mockResolvedValueOnce({});
-    // 3) Segundo UPDATE (retry) resuelve ok
-    sendSpy.mockResolvedValueOnce({});
+    const sendSpy = vi.spyOn(ddb, "send").mockResolvedValueOnce({}); // UPDATE ok
 
     // Act
     await incrementMetrics({
       slug: "promo",
-      variant: undefined, // default -> "default"
-      country: undefined, // default -> "UN"
-      device: undefined,  // default -> "unknown"
+      // variant/country/device omitidos -> defaults
     });
 
     // Assert
-    expect(sendSpy).toHaveBeenCalledTimes(3);
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+
+    const cmd = sendSpy.mock.calls[0][0];
+    expect(cmd.input.Key).toEqual({ PK: "METRIC#promo#default", SK: "TOTAL" });
+    expect(cmd.input.ExpressionAttributeNames).toEqual({ "#c": "UN", "#d": "unknown" });
   });
 });
