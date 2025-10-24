@@ -1,17 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Linkly DynamoDB por entorno
+Description: DynamoDB Linkly (Producción)
 
 Parameters:
   Environment:
     Type: String
-    AllowedValues: [staging, production]
-    Default: staging
+    Default: production
 
 Resources:
   LinklyTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub 'LinklyTable-${Environment}'
+      TableName: !Sub LinklyTable-${Environment}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: PK
@@ -25,8 +24,7 @@ Resources:
           KeyType: RANGE
 
 Outputs:
-  TableName:
-    Description: Nombre de la tabla DynamoDB
+  DynamoTable:
     Value: !Ref LinklyTable
     Export:
-      Name: !Sub 'linkly-${Environment}-DynamoTable'
+      Name: !Sub linkly-${Environment}-DynamoTable

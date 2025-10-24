@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECS Services para Linkly (Producción)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+  LabRoleArn:
+    Type: String
+  DockerHubUser:
+    Type: String
+  RootDomain:
+    Type: String
+  AppDomain:
+    Type: String
+  AdminDomain:
+    Type: String
+
+Resources:
+  FrontendTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub linkly-${Environment}-frontend
+      RequiresCompatibilities: [FARGATE]
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref LabRoleArn
+      TaskRoleArn: !Ref LabRoleArn
+      ContainerDefinitions:
+        - Name: frontend
+          Image: !Sub "${DockerHubUser}/linkly-frontend:latest"
+          PortMappings:
+            - ContainerPort: 5000
+          Environment:
+            - Name: ADMIN_API_URL
+              Value: !Sub "http://${AdminDomain}"
+            - Name: BASE_DOMAIN
+              Value: !Sub "http://${RootDomain}"
+
+  AdminTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub linkly-${Environment}-admin
+      RequiresCompatibilities: [FARGATE]
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref LabRoleArn
+      TaskRoleArn: !Ref LabRoleArn
+      ContainerDefinitions:
+        - Name: admin
+          Image: !Sub "${DockerHubUser}/linkly-ms-admin:latest"
+          PortMappings:
+            - ContainerPort: 8080
+          Environment:
+            - Name: DDB_TABLE
+              Value: !ImportValue
+                Fn::Sub: linkly-${Environment}-DynamoTable
+            - Name: AWS_REGION
+              Value: us-east-1
+
+  RedirectTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub linkly-${Environment}-redirect
+      RequiresCompatibilities: [FARGATE]
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref LabRoleArn
+      TaskRoleArn: !Ref LabRoleArn
+      ContainerDefinitions:
+        - Name: redirect
+          Image: !Sub "${DockerHubUser}/linkly-ms-redirect:latest"
+          PortMappings:
+            - ContainerPort: 8080
+          Environment:
+            - Name: DDB_TABLE
+              Value: !ImportValue
+                Fn::Sub: linkly-${Environment}-DynamoTable
+            - Name: AWS_REGION
+              Value: us-east-1
+
+Outputs:
+  FrontendTaskName:
+    Value: !Ref FrontendTask
+    Export:
+      Name: !Sub linkly-${Environment}-FrontendTask

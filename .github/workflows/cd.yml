@@ -1,4 +1,4 @@
-name: Infra — CloudFormation (staging & prod)
+name: CD — Producción AWS ECS
 
 on:
   workflow_dispatch:
@@ -12,72 +12,23 @@ env:
   ADMIN_DOMAIN: admin.linkly.space
 
 jobs:
-  deploy:
+  deploy-prod:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      # ---------- STAGING ----------
-      - name: Core (staging)
+      - name: Deploy Core (prod)
         run: |
-          set -euo pipefail
           aws cloudformation deploy \
-            --template-file infra/linkly-core.yaml \
-            --stack-name linkly-staging-core \
-            --parameter-overrides \
-              Environment=staging \
-              VpcId=${{ secrets.VPC_ID }} \
-              SubnetIds="${{ secrets.SUBNET_IDS }}" \
-              RootDomain=${{ env.ROOT_DOMAIN }} \
-              AppDomain=${{ env.APP_DOMAIN }} \
-              AdminDomain=${{ env.ADMIN_DOMAIN }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changes
-
-      - name: Data (staging)
-        run: |
-          set -euo pipefail
-          aws cloudformation deploy \
-            --template-file infra/linkly-data.yaml \
-            --stack-name linkly-staging-data \
-            --parameter-overrides Environment=staging \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changes
-
-      - name: ECS Services (staging)
-        run: |
-          set -euo pipefail
-          aws cloudformation deploy \
-            --template-file infra/linkly-ecs-services.yaml \
-            --stack-name linkly-staging-ecs \
-            --parameter-overrides \
-              Environment=staging \
-              LabRoleArn=${{ secrets.LAB_ROLE_ARN }} \
-              DockerHubUser=${{ secrets.DOCKERHUB_USERNAME }} \
-              RootDomain=${{ env.ROOT_DOMAIN }} \
-              AppDomain=${{ env.APP_DOMAIN }} \
-              AdminDomain=${{ env.ADMIN_DOMAIN }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changes
-
-      # ---------- PRODUCTION ----------
-      - name: Core (prod)
-        run: |
-          set -euo pipefail
-          aws cloudformation deploy \
-            --template-file infra/linkly-core.yaml \
+            --template-file infra/linkly-core-prod.yaml \
             --stack-name linkly-production-core \
             --parameter-overrides \
               Environment=production \
@@ -86,24 +37,20 @@ jobs:
               RootDomain=${{ env.ROOT_DOMAIN }} \
               AppDomain=${{ env.APP_DOMAIN }} \
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
-      - name: Data (prod)
+      - name: Deploy Data (prod)
         run: |
-          set -euo pipefail
           aws cloudformation deploy \
-            --template-file infra/linkly-data.yaml \
+            --template-file infra/linkly-data-prod.yaml \
             --stack-name linkly-production-data \
             --parameter-overrides Environment=production \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
-      - name: ECS Services (prod)
+      - name: Deploy ECS Services (prod)
         run: |
-          set -euo pipefail
           aws cloudformation deploy \
-            --template-file infra/linkly-ecs-services.yaml \
+            --template-file infra/linkly-ecs-services-prod.yaml \
             --stack-name linkly-production-ecs \
             --parameter-overrides \
               Environment=production \
@@ -112,20 +59,4 @@ jobs:
               RootDomain=${{ env.ROOT_DOMAIN }} \
               AppDomain=${{ env.APP_DOMAIN }} \
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changes
-
-      - name: CloudFront (prod)
-        run: |
-          set -euo pipefail
-          aws cloudformation deploy \
-            --template-file infra/linkly-cloudfront-prod.yaml \
-            --stack-name linkly-production-cf \
-            --parameter-overrides \
-              Environment=production \
-              RootDomain=${{ env.ROOT_DOMAIN }} \
-              AppDomain=${{ env.APP_DOMAIN }} \
-              CertificateArnRoot=${{ secrets.ACM_ARN_ROOT }} \
-              CertificateArnApp=${{ secrets.ACM_ARN_APP }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changes
+            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
