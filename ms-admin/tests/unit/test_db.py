@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
+
 @pytest.fixture
 def mock_boto3_session():
     with patch("boto3.Session") as mock_session_cls:
@@ -13,7 +14,8 @@ def mock_boto3_session():
         mock_resource.Table.return_value = mock_table
 
         yield mock_session, mock_resource, mock_table
-        
+
+
 @patch("app.db.dynamo.boto3.Session")
 def test_dynamo_initialization(mock_session):
     # Simula los objetos retornados por boto3
@@ -25,6 +27,7 @@ def test_dynamo_initialization(mock_session):
     # Importa el módulo después de aplicar el patch
     import importlib
     from app.db import dynamo
+
     importlib.reload(dynamo)  # fuerza la recarga con el mock activo
 
     # Verifica que la tabla haya sido creada correctamente

@@ -1,7 +1,7 @@
 import sys
 import boto3
 from botocore.config import Config
-from app.core.config import settings  
+from app.core.config import settings
 
 AWS_REGION = settings.AWS_REGION
 DDB_TABLE = settings.DDB_TABLE
