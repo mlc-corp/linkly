@@ -87,6 +87,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # provisto por GitHub
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # tu secreto
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # ej: https://sonarcloud.io o tu SonarQube
+        with:
+          args: >
+            -Dsonar.projectBaseDir=${{ github.workspace }}/frontend
 
   # 3) Pruebas unitarias — ms-admin (Python) + Sonar
   test-ms-admin:
@@ -130,6 +133,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectBaseDir=${{ github.workspace }}/ms-admin
 
   # 4) Pruebas unitarias — ms-redirect (Node / Vitest) + Sonar
   test-ms-redirect:
@@ -166,6 +172,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectBaseDir=${{ github.workspace }}/ms-redirect
 
   # 5) Mensaje si no hay nada que probar
   nothing-to-test:
