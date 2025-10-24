@@ -16,9 +16,14 @@ const SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || "fake";
 const base = new DynamoDBClient({
   region: REGION,
   endpoint: ENDPOINT,
-  credentials: { accessKeyId: ACCESS_KEY_ID, secretAccessKey: SECRET_ACCESS_KEY },
+  credentials: {
+    accessKeyId: ACCESS_KEY_ID,
+    secretAccessKey: SECRET_ACCESS_KEY,
+  },
 });
-const ddb = DynamoDBDocumentClient.from(base, { marshallOptions: { removeUndefinedValues: true } });
+const ddb = DynamoDBDocumentClient.from(base, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 async function waitForDynamo(timeoutMs = 30000) {
   const start = Date.now();
@@ -30,7 +35,9 @@ async function waitForDynamo(timeoutMs = 30000) {
       return;
     } catch (err) {
       if (Date.now() - start > timeoutMs) {
-        throw new Error(`Timeout esperando DynamoDB en ${ENDPOINT}: ${err?.message || err}`);
+        throw new Error(
+          `Timeout esperando DynamoDB en ${ENDPOINT}: ${err?.message || err}`,
+        );
       }
       const backoff = Math.min(1000, 200 + attempt * 100);
       await new Promise((r) => setTimeout(r, backoff));
@@ -47,38 +54,45 @@ async function ensureTable() {
     if (err?.name !== "ResourceNotFoundException") throw err;
   }
 
-  await base.send(new CreateTableCommand({
-    TableName: TABLE,
-    AttributeDefinitions: [
-      { AttributeName: "PK", AttributeType: "S" },
-      { AttributeName: "SK", AttributeType: "S" },
-    ],
-    KeySchema: [
-      { AttributeName: "PK", KeyType: "HASH" },
-      { AttributeName: "SK", KeyType: "RANGE" },
-    ],
-    BillingMode: "PAY_PER_REQUEST",
-  }));
+  await base.send(
+    new CreateTableCommand({
+      TableName: TABLE,
+      AttributeDefinitions: [
+        { AttributeName: "PK", AttributeType: "S" },
+        { AttributeName: "SK", AttributeType: "S" },
+      ],
+      KeySchema: [
+        { AttributeName: "PK", KeyType: "HASH" },
+        { AttributeName: "SK", KeyType: "RANGE" },
+      ],
+      BillingMode: "PAY_PER_REQUEST",
+    }),
+  );
 
   const start = Date.now();
   while (true) {
-    const { Table } = await base.send(new DescribeTableCommand({ TableName: TABLE }));
+    const { Table } = await base.send(
+      new DescribeTableCommand({ TableName: TABLE }),
+    );
     if (Table?.TableStatus === "ACTIVE") break;
-    if (Date.now() - start > 30000) throw new Error("Timeout esperando tabla ACTIVE");
+    if (Date.now() - start > 30000)
+      throw new Error("Timeout esperando tabla ACTIVE");
     await new Promise((r) => setTimeout(r, 500));
   }
 }
 
 async function seedData() {
-  await ddb.send(new PutCommand({
-    TableName: TABLE,
-    Item: {
-      PK: "LINK#promo",
-      SK: "META",
-      enabled: true,
-      destinationUrl: "https://example.com",
-    },
-  }));
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: {
+        PK: "LINK#promo",
+        SK: "META",
+        enabled: true,
+        destinationUrl: "https://example.com",
+      },
+    }),
+  );
 }
 
 (async () => {

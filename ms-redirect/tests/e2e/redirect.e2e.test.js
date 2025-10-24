@@ -18,7 +18,7 @@ const ddbDoc = DynamoDBDocumentClient.from(
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "fake",
     },
   }),
-  { marshallOptions: { removeUndefinedValues: true } }
+  { marshallOptions: { removeUndefinedValues: true } },
 );
 
 async function getMetric(slug, variant = "default") {
@@ -27,7 +27,7 @@ async function getMetric(slug, variant = "default") {
       TableName: DDB_TABLE,
       Key: { PK: `METRIC#${slug}#${variant}`, SK: "TOTAL" },
       ConsistentRead: true,
-    })
+    }),
   );
   return out.Item;
 }
@@ -60,7 +60,7 @@ describe("E2E ms-redirect (AAA)", () => {
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("https://example.com");
 
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 150));
 
     const after = await getMetric(slug, variant);
     expect(after).toBeDefined();

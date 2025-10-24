@@ -1,6 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+
 import routes from "./routes.js";
 
 export function createApp() {
@@ -27,7 +28,7 @@ export function createApp() {
       crossOriginOpenerPolicy: { policy: "same-origin" },
       crossOriginResourcePolicy: { policy: "same-origin" },
       referrerPolicy: { policy: "no-referrer" },
-    })
+    }),
   );
 
   app.use(morgan("combined"));

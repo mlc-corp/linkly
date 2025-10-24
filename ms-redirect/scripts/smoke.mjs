@@ -3,7 +3,7 @@ import "dotenv/config";
 const base = process.env.APP_BASE_URL || "https://tu-dominio.com";
 const url = `${base.replace(/\/+$/, "")}/health`;
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function check() {
   for (let i = 1; i <= 10; i++) {

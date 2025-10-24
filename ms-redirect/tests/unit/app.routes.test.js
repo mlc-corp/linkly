@@ -46,7 +46,9 @@ describe("Rutas ms-redirect (AAA)", () => {
 
   it("GET /:slug => 302 redirect y registra métricas con headers CF", async () => {
     // Arrange
-    getLinkBySlug.mockResolvedValueOnce({ destinationUrl: "https://example.com" });
+    getLinkBySlug.mockResolvedValueOnce({
+      destinationUrl: "https://example.com",
+    });
 
     // Act
     const res = await request(app)

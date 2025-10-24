@@ -17,15 +17,15 @@ describe("dynamo.js init (al importar)", () => {
     delete process.env.DDB_TABLE;
     process.env.AWS_REGION = "us-east-1";
 
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation(() => {
-        throw new Error("exit");
-      });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("exit");
+    });
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     vi.mock("@aws-sdk/client-dynamodb", () => ({
-      DynamoDBClient: class { constructor() {} },
+      DynamoDBClient: class {
+        constructor() {}
+      },
     }));
     vi.mock("@aws-sdk/lib-dynamodb", () => ({
       DynamoDBDocumentClient: { from: () => ({ send: vi.fn() }) },
@@ -34,7 +34,9 @@ describe("dynamo.js init (al importar)", () => {
     }));
 
     await expect(import("../../src/dynamo.js")).rejects.toThrow("exit");
-    expect(errSpy).toHaveBeenCalledWith("[ms-redirect] Falta DDB_TABLE en el .env");
+    expect(errSpy).toHaveBeenCalledWith(
+      "[ms-redirect] Falta DDB_TABLE en el .env",
+    );
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
@@ -124,14 +126,18 @@ describe("dynamo.js runtime", () => {
   });
 
   it("getLinkBySlug => null si no hay Item", async () => {
-    const sendSpy = vi.spyOn(ddb, "send").mockResolvedValueOnce({ Item: undefined });
+    const sendSpy = vi
+      .spyOn(ddb, "send")
+      .mockResolvedValueOnce({ Item: undefined });
     const result = await getLinkBySlug("abc");
     expect(sendSpy).toHaveBeenCalledTimes(1);
     expect(result).toBeNull();
   });
 
   it("getLinkBySlug => null si enabled === false", async () => {
-    const sendSpy = vi.spyOn(ddb, "send").mockResolvedValueOnce({ Item: { enabled: false } });
+    const sendSpy = vi
+      .spyOn(ddb, "send")
+      .mockResolvedValueOnce({ Item: { enabled: false } });
     const result = await getLinkBySlug("abc");
     expect(sendSpy).toHaveBeenCalledTimes(1);
     expect(result).toBeNull();
@@ -161,15 +167,22 @@ describe("dynamo.js runtime", () => {
 
     expect(cmd.input.TableName).toBe("TestTable");
     expect(cmd.input.Key).toEqual({ PK: "METRIC#promo#B", SK: "TOTAL" });
-    expect(cmd.input.ExpressionAttributeNames).toEqual({ "#c": "CO", "#d": "mobile" });
+    expect(cmd.input.ExpressionAttributeNames).toEqual({
+      "#c": "CO",
+      "#d": "mobile",
+    });
     expect(cmd.input.ExpressionAttributeValues).toMatchObject({
       ":one": 1,
       ":zero": 0,
       ":empty": {},
     });
     expect(cmd.input.UpdateExpression).toContain("ADD clicks :one");
-    expect(cmd.input.UpdateExpression).toContain("byCountry = if_not_exists(byCountry, :empty)");
-    expect(cmd.input.UpdateExpression).toContain("byDevice = if_not_exists(byDevice, :empty)");
+    expect(cmd.input.UpdateExpression).toContain(
+      "byCountry = if_not_exists(byCountry, :empty)",
+    );
+    expect(cmd.input.UpdateExpression).toContain(
+      "byDevice = if_not_exists(byDevice, :empty)",
+    );
     expect(cmd.input.ReturnValues).toBe("NONE");
   });
 
@@ -182,6 +195,9 @@ describe("dynamo.js runtime", () => {
     const cmd = sendSpy.mock.calls[0][0];
 
     expect(cmd.input.Key).toEqual({ PK: "METRIC#promo#default", SK: "TOTAL" });
-    expect(cmd.input.ExpressionAttributeNames).toEqual({ "#c": "UN", "#d": "unknown" });
+    expect(cmd.input.ExpressionAttributeNames).toEqual({
+      "#c": "UN",
+      "#d": "unknown",
+    });
   });
 });
