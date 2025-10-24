@@ -13,12 +13,13 @@ if (!DDB_TABLE) {
 const baseClient = new DynamoDBClient({
   region: REGION,
   ...(DDB_ENDPOINT ? { endpoint: DDB_ENDPOINT } : {}),
-  credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
-    ? {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      }
-    : undefined,
+  credentials:
+    process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+      ? {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        }
+      : undefined,
 });
 
 export const ddb = DynamoDBDocumentClient.from(baseClient, {
@@ -33,17 +34,17 @@ export async function getLinkBySlug(slug) {
       ConsistentRead: true,
     })
   );
+
   if (!Item || Item.enabled === false) return null;
   return { destinationUrl: Item.destinationUrl };
 }
 
-async function initMetricIfAbsent(slug, variant) {
-  const v = variant || "default";
+async function initMetricIfAbsent(slug, variant = "default") {
   try {
     await ddb.send(
       new UpdateCommand({
         TableName: DDB_TABLE,
-        Key: { PK: `METRIC#${slug}#${v}`, SK: "TOTAL" },
+        Key: { PK: `METRIC#${slug}#${variant}`, SK: "TOTAL" },
         ConditionExpression: "attribute_not_exists(PK)",
         UpdateExpression:
           "SET byCountry = :empty, byDevice = :empty, clicks = if_not_exists(clicks, :zero)",
@@ -58,16 +59,20 @@ async function initMetricIfAbsent(slug, variant) {
   }
 }
 
-export async function incrementMetrics({ slug, variant, country, device }) {
-  const v = variant || "default";
-  const c = (country || "UN").toUpperCase();
-  const d = device || "unknown";
+export async function incrementMetrics({
+  slug,
+  variant = "default",
+  country = "UN",
+  device = "unknown",
+}) {
+  const c = country.toUpperCase();
+  const d = device;
 
   const doUpdate = () =>
     ddb.send(
       new UpdateCommand({
         TableName: DDB_TABLE,
-        Key: { PK: `METRIC#${slug}#${v}`, SK: "TOTAL" },
+        Key: { PK: `METRIC#${slug}#${variant}`, SK: "TOTAL" },
         UpdateExpression:
           "SET byCountry.#c = if_not_exists(byCountry.#c, :zero) + :one, " +
           "    byDevice.#d  = if_not_exists(byDevice.#d,  :zero) + :one " +
@@ -81,7 +86,7 @@ export async function incrementMetrics({ slug, variant, country, device }) {
   try {
     await doUpdate();
   } catch (err) {
-    await initMetricIfAbsent(slug, v);
+    await initMetricIfAbsent(slug, variant);
     await doUpdate();
   }
 }
