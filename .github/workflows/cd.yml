@@ -1,9 +1,10 @@
-name: CD — Producción AWS ECS (solo prod)
+name: CD — Producción (solo prod, sin pruebas)
 
 on:
+  workflow_run:
+    workflows: ["CI monorepo — Pruebas unitarias"]  # <- nombre EXACTO del CI
+    types: [completed]
   workflow_dispatch:
-  push:
-    branches: [main]
 
 env:
   AWS_REGION: us-east-1
@@ -13,6 +14,11 @@ env:
 
 jobs:
   deploy-prod:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
 
     steps:
@@ -51,11 +57,11 @@ jobs:
             --stack-name linkly-production-core \
             --parameter-overrides \
               Environment=production \
-              VpcId=${{ secrets.VPC_ID }} \
-              SubnetIds="${{ secrets.SUBNET_IDS }}" \
-              RootDomain=${{ env.ROOT_DOMAIN }} \
-              AppDomain=${{ env.APP_DOMAIN }} \
-              AdminDomain=${{ env.ADMIN_DOMAIN }} \
+              VpcId='${{ secrets.VPC_ID }}' \
+              SubnetIds='${{ secrets.SUBNET_IDS }}' \
+              RootDomain='${{ env.ROOT_DOMAIN }}' \
+              AppDomain='${{ env.APP_DOMAIN }}' \
+              AdminDomain='${{ env.ADMIN_DOMAIN }}' \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
       # ---------- DATA (DynamoDB) ----------
@@ -99,11 +105,11 @@ jobs:
             --stack-name linkly-production-ecs \
             --parameter-overrides \
               Environment=production \
-              LabRoleArn=${{ secrets.LAB_ROLE_ARN }} \
-              DockerHubUser=${{ secrets.DOCKERHUB_USERNAME }} \
-              RootDomain=${{ env.ROOT_DOMAIN }} \
-              AppDomain=${{ env.APP_DOMAIN }} \
-              AdminDomain=${{ env.ADMIN_DOMAIN }} \
+              LabRoleArn='${{ secrets.LAB_ROLE_ARN }}' \
+              DockerHubUser='${{ secrets.DOCKERHUB_USERNAME }}' \
+              RootDomain='${{ env.ROOT_DOMAIN }}' \
+              AppDomain='${{ env.APP_DOMAIN }}' \
+              AdminDomain='${{ env.ADMIN_DOMAIN }}' \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
       # ---------- Mostrar URL del ALB ----------
