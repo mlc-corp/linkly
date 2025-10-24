@@ -112,7 +112,7 @@ async function crearLink() {
 
     // Procesar variantes
     let variants = variantsInput 
-        ? variantsInput.split(',').map(v => v.trim()).filter(v => v)
+        ? variantsInput.split(',').map(v => v.trim()).filter(Boolean)
         : [];
 
     const linkData = {
@@ -154,7 +154,7 @@ function limpiarFormulario() {
 }
 
 function verDetalle(linkId) {
-    window.location.href = `/app/links/${linkId}`;
+    globalThis.location.href = `/app/links/${linkId}`;
 }
 
 async function eliminarLink(linkId, slug) {

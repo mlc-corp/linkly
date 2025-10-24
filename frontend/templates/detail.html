@@ -23,7 +23,7 @@
     </div>
 
     <script>
-        window.BASE_DOMAIN = '{{ base_domain }}';
+        globalThis.BASE_DOMAIN = '{{ base_domain }}';
     </script>
 
     <script src="{{ url_for('static', filename='js/detail.js') }}"></script>

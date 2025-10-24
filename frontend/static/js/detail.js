@@ -1,7 +1,7 @@
 // static/js/detail.js
 
 const linkId = document.getElementById('linkIdData').value;
-const BASE_DOMAIN = window.BASE_DOMAIN || 'linkly.space';
+const BASE_DOMAIN = globalThis.BASE_DOMAIN || 'linkly.space';
 
 document.addEventListener('DOMContentLoaded', async () => {
     await cargarDatos();
@@ -101,7 +101,7 @@ function actualizarSeccionMetricas(metrics) {
     
     let metricsHTML = '';
     
-    if (metrics && metrics.totals && metrics.totals.clicks > 0) {
+    if (metrics?.totals?.clicks > 0) {
         const totals = metrics.totals;
         
         metricsHTML = `
@@ -284,5 +284,5 @@ function escapeHtml(text) {
         '"': '&quot;',
         "'": '&#039;'
     };
-    return text.toString().replace(/[&<>"']/g, m => map[m]);
+    return text.toString().replaceAll(/[&<>"']/g, m => map[m]);
 }
