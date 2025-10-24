@@ -582,3 +582,101 @@ def test_link_service_unexpected_error_in_create():
     with patch('requests.request', side_effect=Exception("Unexpected")):
         with pytest.raises(ValueError, match='Error al crear el link'):
             service.create_link('Title', 'slug', 'https://example.com', [])
+
+
+# ============================================================================
+# TESTS ADICIONALES PARA AUMENTAR COVERAGE (SERVICES Y RUTAS)
+# ============================================================================
+
+def test_link_service_make_request_connection_error(monkeypatch):
+    """Verifica que _make_request propaga errores de conexión."""
+    from services.link_service import LinkService
+    service = LinkService()
+
+    def mock_request(*args, **kwargs):
+        raise requests.RequestException("Connection error")
+
+    monkeypatch.setattr("requests.request", mock_request)
+
+    with pytest.raises(requests.RequestException):
+        service._make_request("GET", "/links")
+
+
+def test_link_service_get_all_links_exception(monkeypatch):
+    """Verifica manejo de excepciones inesperadas en get_all_links."""
+    from services.link_service import LinkService
+    service = LinkService()
+
+    def mock_request(*args, **kwargs):
+        raise Exception("Unexpected")
+
+    monkeypatch.setattr("requests.request", mock_request)
+    result = service.get_all_links()
+    assert result == []
+
+
+def test_link_service_get_link_by_id_exception(monkeypatch):
+    """Verifica manejo de errores inesperados en get_link_by_id."""
+    from services.link_service import LinkService
+    service = LinkService()
+
+    def mock_request(*args, **kwargs):
+        raise Exception("Unexpected")
+
+    monkeypatch.setattr("requests.request", mock_request)
+    result = service.get_link_by_id("lk_test")
+    assert result is None
+
+
+def test_link_service_delete_link_exception(monkeypatch):
+    """Verifica manejo de errores inesperados en delete_link."""
+    from services.link_service import LinkService
+    service = LinkService()
+
+    def mock_request(*args, **kwargs):
+        raise Exception("Unexpected")
+
+    monkeypatch.setattr("requests.request", mock_request)
+    result = service.delete_link("lk_test")
+    assert result is False
+
+
+def test_link_service_get_metrics_exception(monkeypatch):
+    """Verifica manejo de errores inesperados en get_link_metrics."""
+    from services.link_service import LinkService
+    service = LinkService()
+
+    def mock_request(*args, **kwargs):
+        raise Exception("Unexpected")
+
+    monkeypatch.setattr("requests.request", mock_request)
+    result = service.get_link_metrics("lk_test")
+    assert result is None
+
+
+def test_link_service_health_check_request_exception(monkeypatch):
+    """Verifica manejo de RequestException en health_check."""
+    from services.link_service import LinkService
+    service = LinkService()
+
+    def mock_request(*args, **kwargs):
+        raise requests.RequestException("Conn error")
+
+    monkeypatch.setattr("requests.request", mock_request)
+    result = service.health_check()
+    assert result is False
+
+
+def test_api_health_connection_error(client, mock_link_service):
+    """Verifica que /api/health maneja excepciones."""
+    mock_link_service.health_check.side_effect = requests.RequestException("error")
+    response = client.get('/api/health')
+    assert response.status_code in (503, 500)
+
+
+def test_api_create_link_invalid_json(client):
+    """Verifica que /api/links devuelve 400 si el JSON está malformado."""
+    response = client.post('/api/links', data="not a json", content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert 'error' in data
