@@ -1,3 +1,6 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Linkly ECS Services - despliega frontend, admin y redirect en ECS Fargate
+
 Parameters:
   Environment:
     Type: String
@@ -15,6 +18,9 @@ Parameters:
     Type: String
 
 Resources:
+  # ======================================================
+  # FRONTEND TASK
+  # ======================================================
   FrontendTask:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -35,7 +41,12 @@ Resources:
               Value: !Sub "http://${AdminDomain}"
             - Name: BASE_DOMAIN
               Value: !Sub "http://${RootDomain}"
+            - Name: APP_BASE_URL
+              Value: !Sub "http://${AppDomain}"
 
+  # ======================================================
+  # ADMIN TASK
+  # ======================================================
   AdminTask:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -57,7 +68,12 @@ Resources:
                 Fn::Sub: linkly-${Environment}-DynamoTable
             - Name: AWS_REGION
               Value: us-east-1
+            - Name: PORT
+              Value: "8080"
 
+  # ======================================================
+  # REDIRECT TASK
+  # ======================================================
   RedirectTask:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -79,7 +95,12 @@ Resources:
                 Fn::Sub: linkly-${Environment}-DynamoTable
             - Name: AWS_REGION
               Value: us-east-1
+            - Name: PORT
+              Value: "8080"
 
+  # ======================================================
+  # FRONTEND SERVICE
+  # ======================================================
   FrontendService:
     Type: AWS::ECS::Service
     DependsOn: FrontendTask
@@ -95,14 +116,19 @@ Resources:
           SecurityGroups:
             - !ImportValue
                 Fn::Sub: linkly-${Environment}-ServicesSg
-          Subnets: !Split [",", !ImportValue
-                Fn::Sub: linkly-${Environment}-PublicSubnets]
+          Subnets:
+            Fn::Split:
+              - ","
+              - Fn::ImportValue: !Sub linkly-${Environment}-PublicSubnets
       LoadBalancers:
         - ContainerName: frontend
           ContainerPort: 5000
           TargetGroupArn: !ImportValue
             Fn::Sub: linkly-${Environment}-TgFrontend
 
+  # ======================================================
+  # ADMIN SERVICE
+  # ======================================================
   AdminService:
     Type: AWS::ECS::Service
     DependsOn: AdminTask
@@ -118,14 +144,19 @@ Resources:
           SecurityGroups:
             - !ImportValue
                 Fn::Sub: linkly-${Environment}-ServicesSg
-          Subnets: !Split [",", !ImportValue
-                Fn::Sub: linkly-${Environment}-PublicSubnets]
+          Subnets:
+            Fn::Split:
+              - ","
+              - Fn::ImportValue: !Sub linkly-${Environment}-PublicSubnets
       LoadBalancers:
         - ContainerName: admin
           ContainerPort: 8080
           TargetGroupArn: !ImportValue
             Fn::Sub: linkly-${Environment}-TgAdmin
 
+  # ======================================================
+  # REDIRECT SERVICE
+  # ======================================================
   RedirectService:
     Type: AWS::ECS::Service
     DependsOn: RedirectTask
@@ -141,8 +172,10 @@ Resources:
           SecurityGroups:
             - !ImportValue
                 Fn::Sub: linkly-${Environment}-ServicesSg
-          Subnets: !Split [",", !ImportValue
-                Fn::Sub: linkly-${Environment}-PublicSubnets]
+          Subnets:
+            Fn::Split:
+              - ","
+              - Fn::ImportValue: !Sub linkly-${Environment}-PublicSubnets
       LoadBalancers:
         - ContainerName: redirect
           ContainerPort: 8080
