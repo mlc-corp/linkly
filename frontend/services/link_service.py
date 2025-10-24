@@ -243,6 +243,10 @@ class LinkService:
         """
         try:
             response = self._make_request('GET', '/health')
-            return response.status_code == 200 and response.json().get('ok') == True
-        except:
+            return response.status_code == 200 and response.json().get('ok') is True
+        except requests.RequestException as e:
+            print(f"[LinkService] Error de conexión en health_check: {e}")
+            return False
+        except Exception as e:
+            print(f"[LinkService] Error inesperado en health_check: {e}")
             return False
