@@ -14,10 +14,10 @@ Parameters:
     Default: app.linkly.space
   CertificateArnRoot:
     Type: String
-    Description: ACM ARN para linkly.space (en us-east-1)
+    Description: ACM ARN para linkly.space (us-east-1)
   CertificateArnApp:
     Type: String
-    Description: ACM ARN para app.linkly.space (en us-east-1)
+    Description: ACM ARN para app.linkly.space (us-east-1)
 
 Resources:
   CfApp:
@@ -25,15 +25,18 @@ Resources:
     Properties:
       DistributionConfig:
         Enabled: true
-        Aliases: [!Ref AppDomain]
+        Aliases:
+          - !Ref AppDomain
         Origins:
           - Id: origin-alb-app
-            DomainName: !ImportValue linkly-production-ALBDnsName
-            CustomOriginConfig: { OriginProtocolPolicy: http-only }
+            DomainName:
+              Fn::ImportValue: !Sub 'linkly-${Environment}-ALBDnsName'
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
         DefaultCacheBehavior:
           TargetOriginId: origin-alb-app
           ViewerProtocolPolicy: redirect-to-https
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6   # CachingOptimized (AWS managed)
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6        # CachingOptimized
           OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf # AllViewerExceptHostHeader
         ViewerCertificate:
           AcmCertificateArn: !Ref CertificateArnApp
@@ -44,22 +47,19 @@ Resources:
     Properties:
       DistributionConfig:
         Enabled: true
-        Aliases: [!Ref RootDomain]
+        Aliases:
+          - !Ref RootDomain
         Origins:
           - Id: origin-alb-root
-            DomainName: !ImportValue linkly-production-ALBDnsName
-            CustomOriginConfig: { OriginProtocolPolicy: http-only }
+            DomainName:
+              Fn::ImportValue: !Sub 'linkly-${Environment}-ALBDnsName'
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
         DefaultCacheBehavior:
           TargetOriginId: origin-alb-root
           ViewerProtocolPolicy: redirect-to-https
-          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad        # CachingDisabled
           OriginRequestPolicyId: 216adef6-5c7f-47e4-b989-5492eafa07d3 # AllViewer
-          ForwardedValues:
-            QueryString: true
-            Headers:
-              - CloudFront-Viewer-Country
-              - CloudFront-Is-Mobile-Viewer
-              - CloudFront-Viewer-Device-Type
         ViewerCertificate:
           AcmCertificateArn: !Ref CertificateArnRoot
           SslSupportMethod: sni-only
@@ -67,7 +67,9 @@ Resources:
 Outputs:
   CloudFrontAppId:
     Value: !Ref CfApp
-    Export: { Name: linkly-production-CloudFrontAppId }
+    Export:
+      Name: linkly-production-CloudFrontAppId
   CloudFrontRootId:
     Value: !Ref CfRoot
-    Export: { Name: linkly-production-CloudFrontRootId }
+    Export:
+      Name: linkly-production-CloudFrontRootId

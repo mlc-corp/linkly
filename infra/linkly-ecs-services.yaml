@@ -1,198 +1,32 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Linkly ECS Services (frontend, admin, redirect) usando LabRole y ALB del core
+Description: Linkly DynamoDB por entorno
 
 Parameters:
   Environment:
     Type: String
     AllowedValues: [staging, production]
     Default: staging
-  LabRoleArn:
-    Type: String
-  DockerHubUser:
-    Type: String
-    Default: yourdockeruser
-  RootDomain:
-    Type: String
-    Default: linkly.space
-  AppDomain:
-    Type: String
-    Default: app.linkly.space
-  AdminDomain:
-    Type: String
-    Default: admin.linkly.space
-
-Conditions:
-  IsProd: !Equals [!Ref Environment, "production"]
 
 Resources:
-  # Logs
-  LogFrontend: { Type: AWS::Logs::LogGroup, Properties: { LogGroupName: !Sub /ecs/linkly-${Environment}-frontend, RetentionInDays: 14 } }
-  LogAdmin:    { Type: AWS::Logs::LogGroup, Properties: { LogGroupName: !Sub /ecs/linkly-${Environment}-admin,    RetentionInDays: 14 } }
-  LogRedirect: { Type: AWS::Logs::LogGroup, Properties: { LogGroupName: !Sub /ecs/linkly-${Environment}-redirect, RetentionInDays: 14 } }
-
-  # --- Task Definitions ---
-  TdFrontend:
-    Type: AWS::ECS::TaskDefinition
+  LinklyTable:
+    Type: AWS::DynamoDB::Table
     Properties:
-      Family: !Sub linkly-${Environment}-frontend
-      RequiresCompatibilities: [FARGATE]
-      NetworkMode: awsvpc
-      Cpu: '256'
-      Memory: '512'
-      ExecutionRoleArn: !Ref LabRoleArn
-      TaskRoleArn: !Ref LabRoleArn
-      ContainerDefinitions:
-        - Name: frontend
-          Image: !Sub ${DockerHubUser}/linkly-frontend:latest
-          PortMappings: [{ ContainerPort: 5000 }]
-          Environment:
-            - Name: ADMIN_API_URL
-              Value: !If
-                - IsProd
-                - !Sub "https://${AdminDomain}"
-                - !Sub
-                  - "http://${Alb}/"
-                  - { Alb: { "Fn::ImportValue": !Sub "linkly-${Environment}-ALBDnsName" } }
-            - { Name: FLASK_PORT,  Value: '5000' }
-            - { Name: FLASK_DEBUG, Value: 'False' }
-            - Name: BASE_DOMAIN
-              Value: !If
-                - IsProd
-                - !Sub "https://${RootDomain}"
-                - !Sub
-                  - "http://${Alb}/"
-                  - { Alb: { "Fn::ImportValue": !Sub "linkly-${Environment}-ALBDnsName" } }
-            - Name: APP_BASE_URL
-              Value: !If
-                - IsProd
-                - !Sub "https://${AppDomain}"
-                - !Sub
-                  - "http://${Alb}/"
-                  - { Alb: { "Fn::ImportValue": !Sub "linkly-${Environment}-ALBDnsName" } }
-          LogConfiguration:
-            LogDriver: awslogs
-            Options: { awslogs-group: !Ref LogFrontend, awslogs-region: !Ref AWS::Region, awslogs-stream-prefix: ecs }
-
-  TdAdmin:
-    Type: AWS::ECS::TaskDefinition
-    Properties:
-      Family: !Sub linkly-${Environment}-admin
-      RequiresCompatibilities: [FARGATE]
-      NetworkMode: awsvpc
-      Cpu: '256'
-      Memory: '512'
-      ExecutionRoleArn: !Ref LabRoleArn
-      TaskRoleArn: !Ref LabRoleArn
-      ContainerDefinitions:
-        - Name: ms-admin
-          Image: !Sub ${DockerHubUser}/linkly-ms-admin:latest
-          PortMappings: [{ ContainerPort: 8080 }]
-          Environment:
-            - { Name: AWS_REGION, Value: !Ref AWS::Region }
-            - { Name: DDB_TABLE,  Value: !ImportValue  !Sub "linkly-${Environment}-DynamoTable" }
-            - { Name: PORT,       Value: '8080' }
-            - Name: APP_BASE_URL
-              Value: !If
-                - IsProd
-                - !Sub "https://${AppDomain}"
-                - !Sub
-                  - "http://${Alb}/"
-                  - { Alb: { "Fn::ImportValue": !Sub "linkly-${Environment}-ALBDnsName" } }
-          LogConfiguration:
-            LogDriver: awslogs
-            Options: { awslogs-group: !Ref LogAdmin, awslogs-region: !Ref AWS::Region, awslogs-stream-prefix: ecs }
-
-  TdRedirect:
-    Type: AWS::ECS::TaskDefinition
-    Properties:
-      Family: !Sub linkly-${Environment}-redirect
-      RequiresCompatibilities: [FARGATE]
-      NetworkMode: awsvpc
-      Cpu: '256'
-      Memory: '512'
-      ExecutionRoleArn: !Ref LabRoleArn
-      TaskRoleArn: !Ref LabRoleArn
-      ContainerDefinitions:
-        - Name: ms-redirect
-          Image: !Sub ${DockerHubUser}/linkly-ms-redirect:latest
-          PortMappings: [{ ContainerPort: 8080 }]
-          Environment:
-            - { Name: AWS_REGION, Value: !Ref AWS::Region }
-            - { Name: DDB_TABLE,  Value: !ImportValue  !Sub "linkly-${Environment}-DynamoTable" }
-            - { Name: PORT,       Value: '8080' }
-            - Name: APP_BASE_URL
-              Value: !If
-                - IsProd
-                - !Sub "https://${AppDomain}"
-                - !Sub
-                  - "http://${Alb}/"
-                  - { Alb: { "Fn::ImportValue": !Sub "linkly-${Environment}-ALBDnsName" } }
-          LogConfiguration:
-            LogDriver: awslogs
-            Options: { awslogs-group: !Ref LogRedirect, awslogs-region: !Ref AWS::Region, awslogs-stream-prefix: ecs }
-
-  # --- Services conectados al ALB/TGs del core ---
-  SvcFrontend:
-    Type: AWS::ECS::Service
-    Properties:
-      ServiceName: !Sub linkly-${Environment}-frontend
-      Cluster: !ImportValue !Sub linkly-${Environment}-Cluster
-      TaskDefinition: !Ref TdFrontend
-      LaunchType: FARGATE
-      DesiredCount: 1
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
-          Subnets: !Split [",", !ImportValue  !Sub "linkly-${Environment}-PublicSubnets" ]
-          SecurityGroups: [ !ImportValue  !Sub "linkly-${Environment}-ServicesSg" ]
-      LoadBalancers:
-        - ContainerName: frontend
-          ContainerPort: 5000
-          TargetGroupArn: !ImportValue  !Sub "linkly-${Environment}-TgFrontend"
-
-  SvcAdmin:
-    Type: AWS::ECS::Service
-    Properties:
-      ServiceName: !Sub linkly-${Environment}-admin
-      Cluster: !ImportValue !Sub linkly-${Environment}-Cluster
-      TaskDefinition: !Ref TdAdmin
-      LaunchType: FARGATE
-      DesiredCount: 1
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
-          Subnets: !Split [",", !ImportValue  !Sub "linkly-${Environment}-PublicSubnets" ]
-          SecurityGroups: [ !ImportValue  !Sub "linkly-${Environment}-ServicesSg" ]
-      LoadBalancers:
-        - ContainerName: ms-admin
-          ContainerPort: 8080
-          TargetGroupArn: !ImportValue  !Sub "linkly-${Environment}-TgAdmin"
-
-  SvcRedirect:
-    Type: AWS::ECS::Service
-    Properties:
-      ServiceName: !Sub linkly-${Environment}-redirect
-      Cluster: !ImportValue !Sub linkly-${Environment}-Cluster
-      TaskDefinition: !Ref TdRedirect
-      LaunchType: FARGATE
-      DesiredCount: 1
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
-          Subnets: !Split [",", !ImportValue  !Sub "linkly-${Environment}-PublicSubnets" ]
-          SecurityGroups: [ !ImportValue  !Sub "linkly-${Environment}-ServicesSg" ]
-      LoadBalancers:
-        - ContainerName: ms-redirect
-          ContainerPort: 8080
-          TargetGroupArn: !ImportValue  !Sub "linkly-${Environment}-TgRedirect"
+      TableName: !Sub 'LinklyTable-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
 
 Outputs:
-  ECSServiceFrontendName:
-    Value: !GetAtt SvcFrontend.Name
-    Export: { Name: !Sub linkly-${Environment}-ECSServiceFrontendName }
-  ECSServiceAdminName:
-    Value: !GetAtt SvcAdmin.Name
-    Export: { Name: !Sub linkly-${Environment}-ECSServiceAdminName }
-  ECSServiceRedirectName:
-    Value: !GetAtt SvcRedirect.Name
-    Export: { Name: !Sub linkly-${Environment}-ECSServiceRedirectName }
+  TableName:
+    Description: Nombre de la tabla DynamoDB
+    Value: !Ref LinklyTable
+    Export:
+      Name: !Sub 'linkly-${Environment}-DynamoTable'
