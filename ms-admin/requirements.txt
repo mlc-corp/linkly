@@ -4,3 +4,5 @@ boto3
 python-dotenv
 httpx
 pytest
+coverage
+pytest-cov
