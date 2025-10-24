@@ -71,9 +71,7 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
-          elif [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          python -m pip install -U pytest pytest-cov black flake8
+          pip install -r requirements.txt
 
       # --- LINTS (frontend) ---
       - name: Black (check)
@@ -126,9 +124,7 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
-          elif [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          python -m pip install -U pytest pytest-cov black flake8
+          pip install -r requirements.txt
 
       # --- LINTS (ms-admin) ---
       - name: Black (check)
@@ -211,3 +207,80 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "No changed projects. Skipping unit tests."
+
+  # 6) NUEVO — Build Docker SIEMPRE; Push SOLO en push/merge a main (por servicio cambiado)
+  docker-build-push:
+    name: Docker · build(+push) por servicio cambiado
+    needs: [changed, test-frontend, test-ms-admin, test-ms-redirect]
+    runs-on: ubuntu-latest
+    if: |
+      needs.changed.outputs.frontend == 'true' ||
+      needs.changed.outputs.ms_admin == 'true' ||
+      needs.changed.outputs.ms_redirect == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: frontend
+            changed: ${{ needs.changed.outputs.frontend }}
+            context: frontend
+            dockerfile: frontend/Dockerfile
+            image_suffix: linkly-frontend
+          - id: ms-admin
+            changed: ${{ needs.changed.outputs.ms_admin }}
+            context: ms-admin
+            dockerfile: ms-admin/Dockerfile
+            image_suffix: linkly-ms-admin
+          - id: ms-redirect
+            changed: ${{ needs.changed.outputs.ms_redirect }}
+            context: ms-redirect
+            dockerfile: ms-redirect/Dockerfile
+            image_suffix: linkly-ms-redirect
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip si este servicio no cambió
+        id: skip
+        run: |
+          if [ "${{ matrix.changed }}" != "true" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up QEMU
+        if: steps.skip.outputs.skip != 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.skip.outputs.skip != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      # Login solo en push/merge a main
+      - name: Login to Docker Hub
+        if: steps.skip.outputs.skip != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Compute image tags
+        if: steps.skip.outputs.skip != 'true'
+        id: meta
+        run: |
+          REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_suffix }}"
+          echo "repo=${REPO}" >> $GITHUB_OUTPUT
+          echo "sha_tag=${REPO}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          echo "latest_tag=${REPO}:latest" >> $GITHUB_OUTPUT
+
+      - name: Build (PR) / Build+Push (main)
+        if: steps.skip.outputs.skip != 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.latest_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
