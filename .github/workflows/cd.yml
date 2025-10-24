@@ -1,124 +1,129 @@
-name: CD — Producción (solo prod, sin pruebas)
+name: CD — Deploy Linkly a ECS
 
 on:
   workflow_run:
-    workflows: ["CI monorepo — Pruebas unitarias"]  # <- nombre EXACTO del CI
+    workflows: ["CI monorepo — Pruebas unitarias"]
     types: [completed]
   workflow_dispatch:
 
-env:
-  AWS_REGION: us-east-1
-  ROOT_DOMAIN: linkly.space
-  APP_DOMAIN: app.linkly.space
-  ADMIN_DOMAIN: admin.linkly.space
-
 jobs:
-  deploy-prod:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
+  deploy-admin:
     runs-on: ubuntu-latest
-
+    outputs:
+      admin_url: ${{ steps.out.outputs.admin_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Credenciales VocLabs + asumir LabRole (sin session tags)
-      - name: Configure AWS (assume LabRole)
+      - name: Configurar credenciales AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
-          role-to-assume:        ${{ secrets.LAB_ROLE_ARN }}
-          role-session-name:     linkly-prod-deploy
-          role-skip-session-tagging: true
-          aws-region:            ${{ env.AWS_REGION }}
 
-      # ---------- CORE (ALB + SG) ----------
-      - name: Preflight — core (delete if ROLLBACK_COMPLETE)
-        run: |
-          set -euo pipefail
-          STACK="linkly-production-core"
-          STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" \
-            --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NONE")
-          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
-            aws cloudformation delete-stack --stack-name "$STACK"
-            aws cloudformation wait stack-delete-complete --stack-name "$STACK"
-          fi
+      - name: Login a ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Deploy Core (ALB + SG)
+      - name: Build y push imagen admin
         run: |
-          set -euo pipefail
+          IMAGE=${{ secrets.ECR_URI }}/linkly-admin:$(git rev-parse --short HEAD)
+          docker build -t "$IMAGE" ./ms-admin
+          docker push "$IMAGE"
+          echo "IMAGE_URI=$IMAGE" >> $GITHUB_ENV
+
+      - name: Desplegar CloudFormation (admin)
+        id: deploy
+        run: |
+          STACK=linkly-admin
           aws cloudformation deploy \
-            --template-file infra/linkly-core-prod.yaml \
-            --stack-name linkly-production-core \
+            --stack-name $STACK \
+            --template-file infra/linkly-service.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides \
-              Environment=production \
-              VpcId='${{ secrets.VPC_ID }}' \
-              SubnetIds='${{ secrets.SUBNET_IDS }}' \
-              RootDomain='${{ env.ROOT_DOMAIN }}' \
-              AppDomain='${{ env.APP_DOMAIN }}' \
-              AdminDomain='${{ env.ADMIN_DOMAIN }}' \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+              ServiceName=linkly-admin \
+              ImageUri=$IMAGE_URI \
+              ContainerPort=8080 \
+              AdminApiUrl="" \
+              BaseDomain=http://localhost:8081 \
+              AppBaseUrl=http://localhost:5000
+          ADMIN_URL=$(aws cloudformation describe-stacks --stack-name $STACK \
+            --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
+          echo "admin_url=$ADMIN_URL" >> $GITHUB_OUTPUT
+      - id: out
+        run: echo "admin_url=${{ steps.deploy.outputs.admin_url }}" >> $GITHUB_OUTPUT
 
-      # ---------- DATA (DynamoDB) ----------
-      - name: Preflight — data (delete if ROLLBACK_COMPLETE)
-        run: |
-          set -euo pipefail
-          STACK="linkly-production-data"
-          STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" \
-            --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NONE")
-          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
-            aws cloudformation delete-stack --stack-name "$STACK"
-            aws cloudformation wait stack-delete-complete --stack-name "$STACK"
-          fi
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: deploy-admin
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Deploy Data (DynamoDB)
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Login a ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build y push imagen frontend
         run: |
-          set -euo pipefail
+          IMAGE=${{ secrets.ECR_URI }}/linkly-frontend:$(git rev-parse --short HEAD)
+          docker build -t "$IMAGE" ./frontend
+          docker push "$IMAGE"
+          echo "IMAGE_URI=$IMAGE" >> $GITHUB_ENV
+
+      - name: Desplegar CloudFormation (frontend)
+        run: |
+          STACK=linkly-frontend
+          ADMIN_URL=${{ needs.deploy-admin.outputs.admin_url }}
           aws cloudformation deploy \
-            --template-file infra/linkly-data-prod.yaml \
-            --stack-name linkly-production-data \
-            --parameter-overrides Environment=production \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
-
-      # ---------- ECS SERVICES ----------
-      - name: Preflight — ecs (delete if ROLLBACK_COMPLETE)
-        run: |
-          set -euo pipefail
-          STACK="linkly-production-ecs"
-          STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" \
-            --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo "NONE")
-          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
-            aws cloudformation delete-stack --stack-name "$STACK"
-            aws cloudformation wait stack-delete-complete --stack-name "$STACK"
-          fi
-
-      - name: Deploy ECS Services (frontend, admin, redirect)
-        run: |
-          set -euo pipefail
-          aws cloudformation deploy \
-            --template-file infra/linkly-ecs-services-prod.yaml \
-            --stack-name linkly-production-ecs \
+            --stack-name $STACK \
+            --template-file infra/linkly-service.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides \
-              Environment=production \
-              LabRoleArn='${{ secrets.LAB_ROLE_ARN }}' \
-              DockerHubUser='${{ secrets.DOCKERHUB_USERNAME }}' \
-              RootDomain='${{ env.ROOT_DOMAIN }}' \
-              AppDomain='${{ env.APP_DOMAIN }}' \
-              AdminDomain='${{ env.ADMIN_DOMAIN }}' \
-            --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+              ServiceName=linkly-frontend \
+              ImageUri=$IMAGE_URI \
+              ContainerPort=5000 \
+              AdminApiUrl=$ADMIN_URL \
+              BaseDomain=http://localhost:8081 \
+              AppBaseUrl=http://localhost:5000
 
-      # ---------- Mostrar URL del ALB ----------
-      - name: Mostrar URL pública (ALB)
+  deploy-redirect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Login a ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build y push imagen redirect
         run: |
-          set -euo pipefail
-          ALB_URL=$(aws cloudformation describe-stacks \
-            --stack-name linkly-production-core \
-            --query "Stacks[0].Outputs[?OutputKey=='ALBDnsName'].OutputValue" \
-            --output text)
-          echo "✅ Producción lista:"
-          echo "🔗 http://$ALB_URL"
+          IMAGE=${{ secrets.ECR_URI }}/linkly-redirect:$(git rev-parse --short HEAD)
+          docker build -t "$IMAGE" ./ms-redirect
+          docker push "$IMAGE"
+          echo "IMAGE_URI=$IMAGE" >> $GITHUB_ENV
+
+      - name: Desplegar CloudFormation (redirect)
+        run: |
+          STACK=linkly-redirect
+          aws cloudformation deploy \
+            --stack-name $STACK \
+            --template-file infra/linkly-service.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              ServiceName=linkly-redirect \
+              ImageUri=$IMAGE_URI \
+              ContainerPort=8080 \
+              AdminApiUrl="" \
+              BaseDomain=http://localhost:8081 \
+              AppBaseUrl=http://localhost:5000
