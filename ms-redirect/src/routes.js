@@ -1,4 +1,5 @@
 import express from "express";
+
 import { getLinkBySlug, incrementMetrics } from "./dynamo.js";
 import { extractContextFromCFHeaders } from "./metrics.js";
 
@@ -20,6 +21,7 @@ async function handleRedirect(req, res, variantFromPath) {
     country = (ctx?.country || "UN").toUpperCase();
     device = ctx?.device || "unknown";
   } catch {
+    // Intencional: si fallan los headers de Cloudflare, ignoramos y usamos defaults
   }
 
   incrementMetrics({ slug, variant: v, country, device }).catch(() => {});
@@ -29,7 +31,7 @@ async function handleRedirect(req, res, variantFromPath) {
 
 router.get("/:slug", (req, res) => handleRedirect(req, res, undefined));
 router.get("/:slug/:variant", (req, res) =>
-  handleRedirect(req, res, req.params.variant)
+  handleRedirect(req, res, req.params.variant),
 );
 
 export default router;

@@ -1,5 +1,9 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
 
 const REGION = process.env.AWS_REGION || "us-east-1";
 const DDB_TABLE = process.env.DDB_TABLE;
@@ -32,7 +36,7 @@ export async function getLinkBySlug(slug) {
       TableName: DDB_TABLE,
       Key: { PK: `LINK#${slug}`, SK: "META" },
       ConsistentRead: true,
-    })
+    }),
   );
 
   if (!Item || Item.enabled === false) return null;
@@ -52,17 +56,16 @@ export async function incrementMetrics({
     new UpdateCommand({
       TableName: DDB_TABLE,
       Key: { PK: `METRIC#${slug}#${variant}`, SK: "TOTAL" },
-      UpdateExpression:
-        [
-          "SET byCountry = if_not_exists(byCountry, :empty)",
-          "    , byDevice = if_not_exists(byDevice, :empty)",
-          "    , byCountry.#c = if_not_exists(byCountry.#c, :zero) + :one",
-          "    , byDevice.#d  = if_not_exists(byDevice.#d,  :zero) + :one",
-          "ADD clicks :one",
-        ].join(" "),
+      UpdateExpression: [
+        "SET byCountry = if_not_exists(byCountry, :empty)",
+        "    , byDevice = if_not_exists(byDevice, :empty)",
+        "    , byCountry.#c = if_not_exists(byCountry.#c, :zero) + :one",
+        "    , byDevice.#d  = if_not_exists(byDevice.#d,  :zero) + :one",
+        "ADD clicks :one",
+      ].join(" "),
       ExpressionAttributeNames: { "#c": c, "#d": d },
       ExpressionAttributeValues: { ":one": 1, ":zero": 0, ":empty": {} },
       ReturnValues: "NONE",
-    })
+    }),
   );
 }
