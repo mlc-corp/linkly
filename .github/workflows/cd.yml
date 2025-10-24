@@ -1,4 +1,4 @@
-name: CD — Producción AWS ECS
+name: CD — Producción AWS ECS (sin CloudFront)
 
 on:
   workflow_dispatch:
@@ -15,18 +15,46 @@ jobs:
   deploy-prod:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # -----------------------------------------
+      # 1. Checkout del código fuente
+      # -----------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      # -----------------------------------------
+      # 2. Configurar credenciales iniciales (VocLabs)
+      #    Solo para poder asumir el rol LabRole
+      # -----------------------------------------
+      - name: Configure base AWS credentials (VocLabs)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region:            ${{ env.AWS_REGION }}
 
+      # -----------------------------------------
+      # 3. Asumir el LabRole para obtener permisos reales
+      # -----------------------------------------
+      - name: Assume LabRole (obtain temporary credentials)
+        id: assume
+        run: |
+          set -euo pipefail
+          echo "Assuming LabRole: ${{ secrets.LAB_ROLE_ARN }}"
+          CREDS=$(aws sts assume-role \
+            --role-arn "${{ secrets.LAB_ROLE_ARN }}" \
+            --role-session-name "linkly-prod-deploy")
+          echo "AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.Credentials.AccessKeyId')" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.Credentials.SecretAccessKey')" >> $GITHUB_ENV
+          echo "AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Credentials.SessionToken')" >> $GITHUB_ENV
+
+      # -----------------------------------------
+      # 4. Deploy Core Stack (ALB + SG + Networking)
+      # -----------------------------------------
       - name: Deploy Core (prod)
         run: |
+          set -euo pipefail
+          echo "🚀 Deploying core infra for production..."
           aws cloudformation deploy \
             --template-file infra/linkly-core-prod.yaml \
             --stack-name linkly-production-core \
@@ -39,16 +67,26 @@ jobs:
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
+      # -----------------------------------------
+      # 5. Deploy Data Stack (DynamoDB)
+      # -----------------------------------------
       - name: Deploy Data (prod)
         run: |
+          set -euo pipefail
+          echo "📦 Deploying DynamoDB table..."
           aws cloudformation deploy \
             --template-file infra/linkly-data-prod.yaml \
             --stack-name linkly-production-data \
             --parameter-overrides Environment=production \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
+      # -----------------------------------------
+      # 6. Deploy ECS Services (Frontend, Admin, Redirect)
+      # -----------------------------------------
       - name: Deploy ECS Services (prod)
         run: |
+          set -euo pipefail
+          echo "🐳 Deploying ECS services..."
           aws cloudformation deploy \
             --template-file infra/linkly-ecs-services-prod.yaml \
             --stack-name linkly-production-ecs \
@@ -60,3 +98,17 @@ jobs:
               AppDomain=${{ env.APP_DOMAIN }} \
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
+
+      # -----------------------------------------
+      # 7. Obtener y mostrar la URL pública del ALB
+      # -----------------------------------------
+      - name: Show ALB URL (prod)
+        run: |
+          set -euo pipefail
+          echo "🌍 Fetching ALB URL..."
+          ALB_URL=$(aws cloudformation describe-stacks \
+            --stack-name linkly-production-core \
+            --query "Stacks[0].Outputs[?OutputKey=='ALBDnsName'].OutputValue" \
+            --output text)
+          echo "✅ Producción desplegada correctamente:"
+          echo "🔗 http://$ALB_URL"
