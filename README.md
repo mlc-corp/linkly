@@ -4,7 +4,6 @@
 Su objetivo es ofrecer **métricas básicas** sobre los clics, como el país, el tipo de dispositivo o el canal de origen, de forma **ligera, privada y auto-hosteable**.
 
 ---
-
 ## 🚀 Objetivo
 
 Simplificar la creación y el seguimiento de enlaces personalizados.
@@ -15,5 +14,6 @@ Un mismo link (por ejemplo `linkly.space/evento2025`) puede tener variantes que 
 - `linkly.space/evento2025/x` → lo mismo, registrado como X/Twitter  
 
 Todas las variantes redirigen al mismo sitio final, pero **permiten distinguir métricas** por canal, país o dispositivo.
+
 
 ---
