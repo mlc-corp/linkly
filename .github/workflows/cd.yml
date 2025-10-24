@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Usamos credenciales base de VocLabs y asumimos el LabRole para todo el deploy
+      # Credenciales VocLabs + asumir LabRole (sin session tags)
       - name: Configure AWS (assume LabRole)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -28,10 +28,11 @@ jobs:
           aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
           role-to-assume:        ${{ secrets.LAB_ROLE_ARN }}
           role-session-name:     linkly-prod-deploy
+          role-skip-session-tagging: true
           aws-region:            ${{ env.AWS_REGION }}
 
-      # (Opcional) limpiar si quedó en ROLLBACK_COMPLETE
-      - name: Preflight — core
+      # ---------- CORE (ALB + SG) ----------
+      - name: Preflight — core (delete if ROLLBACK_COMPLETE)
         run: |
           set -euo pipefail
           STACK="linkly-production-core"
@@ -57,7 +58,8 @@ jobs:
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
-      - name: Preflight — data
+      # ---------- DATA (DynamoDB) ----------
+      - name: Preflight — data (delete if ROLLBACK_COMPLETE)
         run: |
           set -euo pipefail
           STACK="linkly-production-data"
@@ -77,7 +79,8 @@ jobs:
             --parameter-overrides Environment=production \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
-      - name: Preflight — ecs
+      # ---------- ECS SERVICES ----------
+      - name: Preflight — ecs (delete if ROLLBACK_COMPLETE)
         run: |
           set -euo pipefail
           STACK="linkly-production-ecs"
@@ -103,6 +106,7 @@ jobs:
               AdminDomain=${{ env.ADMIN_DOMAIN }} \
             --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changes
 
+      # ---------- Mostrar URL del ALB ----------
       - name: Mostrar URL pública (ALB)
         run: |
           set -euo pipefail
