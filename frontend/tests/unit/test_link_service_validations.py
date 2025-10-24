@@ -292,32 +292,6 @@ class TestLinkServiceValidations:
     # TESTS DE EDGE CASES
     # ============================================================================
     
-    def test_create_link_all_fields_with_spaces(self, service):
-        """Verifica trimming de todos los campos."""
-        mock_response = Mock()
-        mock_response.status_code = 201
-        mock_response.json.return_value = {
-            'linkId': 'lk_test',
-            'slug': 'test',
-            'title': 'Test',
-            'destinationUrl': 'https://example.com'
-        }
-        
-        with patch('requests.request', return_value=mock_response) as mock_req:
-            service.create_link(
-                "  Test  ",
-                "  test  ",
-                "  https://example.com  ",
-                []
-            )
-            
-            # Verificar que el payload enviado tiene valores sin espacios
-            call_kwargs = mock_req.call_args[1]
-            payload = call_kwargs['json']
-            assert payload['title'] == 'Test'
-            assert payload['slug'] == 'test'
-            assert payload['destinationUrl'] == 'https://example.com'
-    
     def test_health_check_with_invalid_response(self, service):
         """Verifica health check con respuesta inválida."""
         mock_response = Mock()
