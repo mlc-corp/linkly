@@ -1,22 +1,24 @@
 import pytest
 import time
-import sys, os
+import sys
+import os
 import requests
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from fastapi.testclient import TestClient
 from app.main import app
 from app.db.dynamo import table
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
 client = TestClient(app)
+
 
 @pytest.fixture
 def link_payload():
     return {
         "title": "E2E Acceptance Link",
         "destinationUrl": "http://example.com",
-        "variants": ["default", "variant1"]
+        "variants": ["default", "variant1"],
     }
 
 

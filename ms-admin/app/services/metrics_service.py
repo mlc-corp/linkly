@@ -2,13 +2,16 @@ from app.db.dynamo import table
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
+
 def _sum_maps(dst: dict, src: dict | None):
     for k, v in (src or {}).items():
         dst[k] = dst.get(k, 0) + int(v)
 
+
 def _variant_from_pk(pk: str) -> str:
     parts = pk.split("#", 2)
     return parts[2] if len(parts) == 3 else "default"
+
 
 def get_link_by_id(link_id: str):
     """
@@ -16,8 +19,7 @@ def get_link_by_id(link_id: str):
     """
     try:
         resp = table.get_item(
-            Key={"PK": f"LINK#{link_id}", "SK": "META"},
-            ConsistentRead=True
+            Key={"PK": f"LINK#{link_id}", "SK": "META"}, ConsistentRead=True
         )
     except ClientError as e:
         raise HTTPException(status_code=500, detail=f"DynamoDB error: {e}")
@@ -26,6 +28,7 @@ def get_link_by_id(link_id: str):
     if not item:
         raise HTTPException(status_code=404, detail=f"Link {link_id} not found")
     return item
+
 
 def get_link_metrics(link_id: str):
     """
@@ -57,7 +60,7 @@ def get_link_metrics(link_id: str):
     variants = sorted(found_variants) if found_variants else list(declared_variants)
 
     # Index para acceso O(1) por variante
-    by_variant_item = { _variant_from_pk(i["PK"]): i for i in items }
+    by_variant_item = {_variant_from_pk(i["PK"]): i for i in items}
 
     total_clicks = 0
     by_variant = {}
@@ -70,8 +73,7 @@ def get_link_metrics(link_id: str):
             # Fallback por si no salió en el scan pero existe
             try:
                 resp = table.get_item(
-                    Key={"PK": f"METRIC#{slug}#{v}", "SK": "TOTAL"},
-                    ConsistentRead=True
+                    Key={"PK": f"METRIC#{slug}#{v}", "SK": "TOTAL"}, ConsistentRead=True
                 )
                 item = resp.get("Item")
             except ClientError:
@@ -89,8 +91,8 @@ def get_link_metrics(link_id: str):
         "slug": slug,
         "totals": {
             "clicks": total_clicks,
-            "byVariant": by_variant,   # p.ej. {"default": 2, "ig": 1}
-            "byDevice": by_device,     # p.ej. {"mobile": 2, "desktop": 1}
-            "byCountry": by_country,   # p.ej. {"CO": 2, "UN": 1}
+            "byVariant": by_variant,  # p.ej. {"default": 2, "ig": 1}
+            "byDevice": by_device,  # p.ej. {"mobile": 2, "desktop": 1}
+            "byCountry": by_country,  # p.ej. {"CO": 2, "UN": 1}
         },
     }

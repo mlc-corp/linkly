@@ -3,6 +3,7 @@ from pydantic import BaseModel, HttpUrl, field_validator
 from typing import List, Optional, Dict
 import re
 
+
 class LinkCreate(BaseModel):
     slug: Optional[str] = None  # ahora es opcional
     title: str
@@ -42,6 +43,7 @@ class LinkCreate(BaseModel):
             clean.append(variant)
         return clean
 
+
 class LinkOut(BaseModel):
     linkId: str
     slug: str
@@ -49,6 +51,7 @@ class LinkOut(BaseModel):
     destinationUrl: HttpUrl
     variants: List[str]
     createdAt: str
+
 
 class MetricTotals(BaseModel):
     clicks: int

@@ -7,3 +7,5 @@ pytest
 coverage
 pytest-cov
 pytest-html
+black
+flake8

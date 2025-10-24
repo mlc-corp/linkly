@@ -44,7 +44,7 @@ def test_create_link_endpoint(mock_create_link):
         "title": "Test",
         "destinationUrl": "http://example.com",
         "variants": ["default"],
-        "createdAt": "2025-10-22T12:00:00Z",  
+        "createdAt": "2025-10-22T12:00:00Z",
     }
 
     payload = {
