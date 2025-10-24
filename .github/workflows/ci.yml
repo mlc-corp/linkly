@@ -2,7 +2,7 @@ name: CI monorepo — Pruebas unitarias
 
 on:
   push:
-    branches: ['**']     # cualquier rama (incluye feature/x)
+    branches: [ main ]     # cualquier rama (incluye feature/x)
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -45,7 +45,7 @@ jobs:
               - 'ms-redirect/**'
             # No listamos infra/README para que NO disparen tests
 
-  # 2) Pruebas unitarias — frontend (Python) + Sonar
+  # 2) Pruebas unitarias — frontend (Python) + Sonar + Lints
   test-frontend:
     name: Pruebas unitarias · frontend
     needs: changed
@@ -73,7 +73,16 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
           elif [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          python -m pip install -U pytest pytest-cov
+          python -m pip install -U pytest pytest-cov black flake8
+
+      # --- LINTS (frontend) ---
+      - name: Black (check)
+        run: |
+          black --check app.py routes services
+
+      - name: Flake8 (selective paths)
+        run: |
+          flake8 app.py routes services
 
       - name: Run unit tests (con coverage para Sonar)
         env:
@@ -91,7 +100,7 @@ jobs:
           args: >
             -Dsonar.projectBaseDir=${{ github.workspace }}/frontend
 
-  # 3) Pruebas unitarias — ms-admin (Python) + Sonar
+  # 3) Pruebas unitarias — ms-admin (Python) + Sonar + Lints
   test-ms-admin:
     name: Pruebas unitarias · ms-admin
     needs: changed
@@ -119,11 +128,20 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; \
           elif [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          python -m pip install -U pytest pytest-cov
+          python -m pip install -U pytest pytest-cov black flake8
+
+      # --- LINTS (ms-admin) ---
+      - name: Black (check)
+        run: |
+          black --check app
+
+      - name: Flake8 (app)
+        run: |
+          flake8 app
 
       - name: Run unit tests (con coverage para Sonar)
         env:
-          PYTHONPATH: ${{ github.workspace }}/ms-admin}
+          PYTHONPATH: ${{ github.workspace }}/ms-admin
         run: |
           pytest tests/unit/
 
@@ -137,7 +155,7 @@ jobs:
           args: >
             -Dsonar.projectBaseDir=${{ github.workspace }}/ms-admin
 
-  # 4) Pruebas unitarias — ms-redirect (Node / Vitest) + Sonar
+  # 4) Pruebas unitarias — ms-redirect (Node / Vitest) + Sonar + Lints
   test-ms-redirect:
     name: Pruebas unitarias · ms-redirect
     needs: changed
@@ -158,6 +176,13 @@ jobs:
 
       - name: Install deps
         run: npm ci
+
+      # --- LINTS (ms-redirect) ---
+      - name: Prettier (check)
+        run: npm run format:check
+
+      - name: ESLint
+        run: npm run lint
 
       - name: Run unit tests (vitest)
         run: npm test --silent -- tests/unit
