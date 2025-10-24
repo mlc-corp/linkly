@@ -18,6 +18,18 @@ class LinkService:
         # Asegurar que la URL no termine con /
         self.admin_api_url = self.admin_api_url.rstrip('/')
     
+    def _sanitize_id(self, link_id: str) -> str:
+        """
+        Valida que el ID sea seguro antes de construir la URL.
+        Solo se permiten letras, números, guiones y guiones bajos.
+        """
+        if not isinstance(link_id, str):
+            raise ValueError("El identificador del link debe ser texto")
+        if not re.match(r'^[A-Za-z0-9_-]+$', link_id):
+            raise ValueError(f"Identificador de link inválido: {link_id}")
+        return link_id
+
+    
     def _make_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
         """
         Realiza una petición HTTP al MS Admin
@@ -88,7 +100,8 @@ class LinkService:
             requests.RequestException: Si hay error de conexión
         """
         try:
-            response = self._make_request('GET', f'/links/{link_id}')
+            safe_id = self._sanitize_id(link_id)
+            response = self._make_request('GET', f'/links/{safe_id}')
             
             if response.status_code == 200:
                 return response.json()
@@ -188,7 +201,8 @@ class LinkService:
             requests.RequestException: Si hay error de conexión
         """
         try:
-            response = self._make_request('DELETE', f'/links/{link_id}')
+            safe_id = self._sanitize_id(link_id)
+            response = self._make_request('DELETE', f'/links/{safe_id}')
             
             if response.status_code == 204:
                 return True
@@ -218,7 +232,8 @@ class LinkService:
             requests.RequestException: Si hay error de conexión
         """
         try:
-            response = self._make_request('GET', f'/links/{link_id}/metrics')
+            safe_id = self._sanitize_id(link_id)
+            response = self._make_request('GET', f'/links/{safe_id}/metrics')
             
             if response.status_code == 200:
                 return response.json()
