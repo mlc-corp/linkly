@@ -135,7 +135,7 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      VpcId: !Ref VVpcId
+      VpcId: !Ref VpcId
       Port: !Ref ContainerPort
       Protocol: HTTP
       TargetType: ip
