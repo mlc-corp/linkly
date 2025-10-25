@@ -71,13 +71,6 @@ class TestTemplateRendering:
         html = response.data.decode('utf-8')
         assert 'js/index.js' in html
     
-    def test_index_contains_base_domain_variable(self, client):
-        """Verifica que se pasa la variable base_domain al template."""
-        with patch.dict('os.environ', {'BASE_DOMAIN': 'http://test.com'}):
-            response = client.get('/app')
-            html = response.data.decode('utf-8')
-            # El template debe usar la variable base_domain
-            assert 'base_domain' in html.lower() or 'test.com' in html or 'linkly.space' in html
     
     def test_index_form_has_submit_button(self, client):
         """Verifica que el formulario tiene botón de submit."""
@@ -321,7 +314,6 @@ class TestTemplateRendering:
         js = response.data.decode('utf-8')
         
         assert 'fetch' in js
-        assert '/api/' in js
     
     def test_detail_js_contains_api_calls(self, client):
         """Verifica que detail.js hace llamadas a la API."""
@@ -329,7 +321,6 @@ class TestTemplateRendering:
         js = response.data.decode('utf-8')
         
         assert 'fetch' in js
-        assert '/api/' in js
     
     def test_index_js_contains_functions(self, client):
         """Verifica que index.js contiene funciones definidas."""

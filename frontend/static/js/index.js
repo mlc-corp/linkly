@@ -22,7 +22,7 @@ function showMessage(message, type = 'error') {
 
 async function cargarLinks() {
     try {
-        const response = await fetch('/api/links');
+        const response = await fetch('/links');
         
         if (!response.ok) {
             throw new Error('Error al cargar los links');
@@ -123,7 +123,7 @@ async function crearLink() {
     };
 
     try {
-        const response = await fetch('/api/links', {
+        const response = await fetch('/links', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -163,7 +163,7 @@ async function eliminarLink(linkId, slug) {
     }
 
     try {
-        const response = await fetch(`/api/links/${linkId}`, {
+        const response = await fetch(`/links/${linkId}`, {
             method: 'DELETE'
         });
 

@@ -12,7 +12,7 @@ def create_app():
 
     # Registrar blueprints
     app.register_blueprint(web_bp)
-    app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(api_bp)
 
     return app
 

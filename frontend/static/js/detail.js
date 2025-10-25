@@ -11,8 +11,8 @@ async function cargarDatos() {
     try {
         // Cargar información del link y métricas en paralelo
         const [linkResponse, metricsResponse] = await Promise.all([
-            fetch(`/api/links/${linkId}`),
-            fetch(`/api/links/${linkId}/metrics`)
+            fetch(`/links/${linkId}`),
+            fetch(`/links/${linkId}/metrics`)
         ]);
 
         if (!linkResponse.ok) {
@@ -49,7 +49,7 @@ async function refrescarMetricas() {
     }
     
     try {
-        const metricsResponse = await fetch(`/api/links/${linkId}/metrics`);
+        const metricsResponse = await fetch(`/links/${linkId}/metrics`);
         
         let metricsData = null;
         if (metricsResponse.ok) {
