@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "Infraestructura básica ECS Fargate - Linkly"
+Description: Linkly - Servicio ECS Fargate con ALB (público o interno)
 
 Parameters:
   ServiceName:
@@ -8,7 +8,17 @@ Parameters:
     Type: String
   ContainerPort:
     Type: Number
-    Default: 8080
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  VpcCidr:
+    Type: String
+    Description: CIDR de la VPC (para SG interno)
+  PublicALB:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Description: "true = ALB público, false = ALB interno (solo VPC)"
   AdminApiUrl:
     Type: String
     Default: ""
@@ -22,46 +32,10 @@ Parameters:
     Type: String
     Default: "LinklyTable"
 
+Conditions:
+  IsPublic: !Equals [ !Ref PublicALB, "true" ]
+
 Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-
-  SubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
-      MapPublicIpOnLaunch: true
-
-  SubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      MapPublicIpOnLaunch: true
-
-  IGW:
-    Type: AWS::EC2::InternetGateway
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      InternetGatewayId: !Ref IGW
-      VpcId: !Ref VPC
-
-  SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Permitir tráfico HTTP"
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -73,11 +47,11 @@ Resources:
       LogGroupName: !Sub "/ecs/${ServiceName}"
       RetentionInDays: 7
 
-  TaskExecutionRole:
+  TaskExecRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal: { Service: ecs-tasks.amazonaws.com }
@@ -93,23 +67,31 @@ Resources:
       Memory: "512"
       NetworkMode: awsvpc
       RequiresCompatibilities: [FARGATE]
-      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ExecutionRoleArn: !GetAtt TaskExecRole.Arn
       ContainerDefinitions:
         - Name: !Ref ServiceName
           Image: !Ref ImageUri
           PortMappings:
             - ContainerPort: !Ref ContainerPort
           Environment:
-            - Name: ADMIN_API_URL
-              Value: !Ref AdminApiUrl
-            - Name: BASE_DOMAIN
-              Value: !Ref BaseDomain
-            - Name: APP_BASE_URL
-              Value: !Ref AppBaseUrl
+            # Comunes
+            - Name: PORT
+              Value: !Ref ContainerPort
             - Name: AWS_REGION
               Value: us-east-1
             - Name: DDB_TABLE
               Value: !Ref DdbTable
+            # Frontend
+            - Name: ADMIN_API_URL
+              Value: !Ref AdminApiUrl
+            - Name: FLASK_PORT
+              Value: !Ref ContainerPort
+            - Name: FLASK_DEBUG
+              Value: "False"
+            - Name: BASE_DOMAIN
+              Value: !Ref BaseDomain
+            - Name: APP_BASE_URL
+              Value: !Ref AppBaseUrl
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -117,18 +99,40 @@ Resources:
               awslogs-region: !Ref "AWS::Region"
               awslogs-stream-prefix: ecs
 
+  AlbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: !Sub "ALB SG - ${ServiceName}"
+      SecurityGroupIngress:
+        - !If
+          - IsPublic
+          - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+          - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Ref VpcCidr }
+
+  ServiceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: !Sub "Service SG - ${ServiceName}"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref AlbSG
+
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub "${ServiceName}-alb"
-      Scheme: internet-facing
-      Subnets: [!Ref SubnetA, !Ref SubnetB]
-      SecurityGroups: [!Ref SecurityGroup]
+      Scheme: !If [ IsPublic, internet-facing, internal ]
+      Subnets: !Ref SubnetIds
+      SecurityGroups: [ !Ref AlbSG ]
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref VpcId
       Port: !Ref ContainerPort
       Protocol: HTTP
       TargetType: ip
@@ -154,8 +158,8 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
-          SecurityGroups: [!Ref SecurityGroup]
-          Subnets: [!Ref SubnetA, !Ref SubnetB]
+          SecurityGroups: [ !Ref ServiceSG ]
+          Subnets: !Ref SubnetIds
       TaskDefinition: !Ref TaskDefinition
       LoadBalancers:
         - ContainerName: !Ref ServiceName
@@ -164,5 +168,5 @@ Resources:
 
 Outputs:
   ServiceUrl:
+    Description: URL (ALB DNS)
     Value: !Sub "http://${ALB.DNSName}"
-    Description: "URL pública del servicio"

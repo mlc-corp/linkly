@@ -1,129 +1,239 @@
-name: CD — Deploy Linkly a ECS
+name: CD — Deploy Linkly (multi-ALB)
 
 on:
   workflow_run:
+    # Se dispara después de que la CI (que construye y publica las imágenes) termine
     workflows: ["CI monorepo — Pruebas unitarias"]
     types: [completed]
   workflow_dispatch:
 
+env:
+  AWS_REGION: us-east-1
+  DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+  DDB_TABLE_NAME: LinklyTable # Nombre de la tabla de DynamoDB
+
 jobs:
-  deploy-admin:
+  # -------------------------------------------------------------
+  # Job: Deploy database (No depende de la red, solo de las credenciales)
+  # -------------------------------------------------------------
+  deploy-database:
+    name: Deploy · database (DynamoDB)
     runs-on: ubuntu-latest
+    # Ya no necesita 'deploy-network'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AWS creds (temporales)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+      
+      - name: Deploy DynamoDB Table (idempotente)
+        run: |
+          aws cloudformation deploy \
+            --stack-name linkly-database \
+            --template-file infra/database.yml \
+            --parameter-overrides \
+              Environment=production # Usando el nombre de tabla del env
+
+  # -------------------------------------------------------------
+  # Job: Deploy redirect (API pública)
+  # -------------------------------------------------------------
+  deploy-redirect:
+    name: Deploy · redirect (public ALB)
+    runs-on: ubuntu-latest
+    # Ahora solo depende de la DB
+    needs: [deploy-database]
+    outputs:
+      redirect_url: ${{ steps.out.outputs.redirect_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AWS creds (temporales)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Calcular imagen
+        id: img
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "image=${{ env.DOCKERHUB_USER }}/linkly-ms-redirect:${SHA}" >> $GITHUB_OUTPUT
+
+      - name: Deploy CFN (redirect)
+        run: |
+          STACK=linkly-redirect
+          IMAGE="${{ steps.img.outputs.image }}"
+          # --- OBTENIENDO VALORES DE SECRETS EN LUGAR DE OUTPUTS DE NETWORK ---
+          VPC="${{ secrets.VPC_ID }}"
+          SUBNETS="${{ secrets.SUBNET_IDS }}"
+          # --- CIDR ya no es necesario para el servicio ---
+
+          aws cloudformation deploy \
+            --stack-name $STACK \
+            --template-file infra/linkly-service.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              ServiceName=$STACK \
+              ImageUri=$IMAGE \
+              ContainerPort=8080 \
+              VpcId=$VPC \
+              SubnetIds=$SUBNETS \
+              PublicALB=true \
+              AdminApiUrl="" \
+              BaseDomain="" \
+              AppBaseUrl="" \
+              DdbTable=${{ env.DDB_TABLE_NAME }}
+
+      - name: Output URL redirect
+        id: out
+        run: |
+          URL=$(aws cloudformation describe-stacks --stack-name linkly-redirect --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
+          echo "redirect_url=$URL" >> $GITHUB_OUTPUT
+          echo "Redirect URL: $URL"
+
+  # -------------------------------------------------------------
+  # Job: Deploy admin (API interna)
+  # -------------------------------------------------------------
+  deploy-admin:
+    name: Deploy · admin (internal ALB)
+    runs-on: ubuntu-latest
+    # Ahora solo depende de la DB
+    needs: [deploy-database]
     outputs:
       admin_url: ${{ steps.out.outputs.admin_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configurar credenciales AWS
+      - name: AWS creds (temporales)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
 
-      - name: Login a ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build y push imagen admin
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Calcular imagen
+        id: img
         run: |
-          IMAGE=${{ secrets.ECR_URI }}/linkly-admin:$(git rev-parse --short HEAD)
-          docker build -t "$IMAGE" ./ms-admin
-          docker push "$IMAGE"
-          echo "IMAGE_URI=$IMAGE" >> $GITHUB_ENV
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "image=${{ env.DOCKERHUB_USER }}/linkly-ms-admin:${SHA}" >> $GITHUB_OUTPUT
 
-      - name: Desplegar CloudFormation (admin)
-        id: deploy
+      - name: Deploy CFN (admin)
         run: |
           STACK=linkly-admin
+          IMAGE="${{ steps.img.outputs.image }}"
+          # --- OBTENIENDO VALORES DE SECRETS EN LUGAR DE OUTPUTS DE NETWORK ---
+          VPC="${{ secrets.VPC_ID }}"
+          SUBNETS="${{ secrets.SUBNET_IDS }}"
+          # --- CIDR ya no es necesario para el servicio ---
+          
+          # ALB interno: PublicALB=false; solo accesible dentro de la VPC
           aws cloudformation deploy \
             --stack-name $STACK \
             --template-file infra/linkly-service.yml \
             --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides \
-              ServiceName=linkly-admin \
-              ImageUri=$IMAGE_URI \
+              ServiceName=$STACK \
+              ImageUri=$IMAGE \
               ContainerPort=8080 \
+              VpcId=$VPC \
+              SubnetIds=$SUBNETS \
+              PublicALB=false \
               AdminApiUrl="" \
-              BaseDomain=http://localhost:8081 \
-              AppBaseUrl=http://localhost:5000
-          ADMIN_URL=$(aws cloudformation describe-stacks --stack-name $STACK \
-            --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
-          echo "admin_url=$ADMIN_URL" >> $GITHUB_OUTPUT
-      - id: out
-        run: echo "admin_url=${{ steps.deploy.outputs.admin_url }}" >> $GITHUB_OUTPUT
+              BaseDomain="" \
+              AppBaseUrl="" \
+              DdbTable=${{ env.DDB_TABLE_NAME }}
 
+      - name: Output URL admin (interno)
+        id: out
+        run: |
+          URL=$(aws cloudformation describe-stacks --stack-name linkly-admin --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
+          echo "admin_url=$URL" >> $GITHUB_OUTPUT
+          echo "Admin URL (interno): $URL"
+
+  # -------------------------------------------------------------
+  # Job: Deploy frontend (Aplicación web)
+  # -------------------------------------------------------------
   deploy-frontend:
+    name: Deploy · frontend (public ALB)
     runs-on: ubuntu-latest
-    needs: deploy-admin
+    # Ahora depende de que Admin y Redirect estén desplegados
+    needs: [deploy-redirect, deploy-admin]
+    outputs:
+      frontend_url: ${{ steps.out.outputs.frontend_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configurar credenciales AWS
+      - name: AWS creds (temporales)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
 
-      - name: Login a ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build y push imagen frontend
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Calcular imagen
+        id: img
         run: |
-          IMAGE=${{ secrets.ECR_URI }}/linkly-frontend:$(git rev-parse --short HEAD)
-          docker build -t "$IMAGE" ./frontend
-          docker push "$IMAGE"
-          echo "IMAGE_URI=$IMAGE" >> $GITHUB_ENV
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "image=${{ env.DOCKERHUB_USER }}/linkly-frontend:${SHA}" >> $GITHUB_OUTPUT
 
-      - name: Desplegar CloudFormation (frontend)
+      - name: Deploy CFN (frontend)
+        env:
+          ADMIN_URL: ${{ needs.deploy-admin.outputs.admin_url }}
+          REDIRECT_URL: ${{ needs.deploy-redirect.outputs.redirect_url }}
         run: |
           STACK=linkly-frontend
-          ADMIN_URL=${{ needs.deploy-admin.outputs.admin_url }}
+          IMAGE="${{ steps.img.outputs.image }}"
+          # --- OBTENIENDO VALORES DE SECRETS EN LUGAR DE OUTPUTS DE NETWORK ---
+          VPC="${{ secrets.VPC_ID }}"
+          SUBNETS="${{ secrets.SUBNET_IDS }}"
+          # --- CIDR ya no es necesario para el servicio ---
+
           aws cloudformation deploy \
             --stack-name $STACK \
             --template-file infra/linkly-service.yml \
             --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides \
-              ServiceName=linkly-frontend \
-              ImageUri=$IMAGE_URI \
+              ServiceName=$STACK \
+              ImageUri=$IMAGE \
               ContainerPort=5000 \
+              VpcId=$VPC \
+              SubnetIds=$SUBNETS \
+              PublicALB=true \
               AdminApiUrl=$ADMIN_URL \
-              BaseDomain=http://localhost:8081 \
-              AppBaseUrl=http://localhost:5000
+              BaseDomain=$REDIRECT_URL \
+              AppBaseUrl="" \
+              DdbTable=${{ env.DDB_TABLE_NAME }}
 
-  deploy-redirect:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configurar credenciales AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ secrets.AWS_REGION }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Login a ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build y push imagen redirect
+      - name: Output URL frontend
+        id: out
         run: |
-          IMAGE=${{ secrets.ECR_URI }}/linkly-redirect:$(git rev-parse --short HEAD)
-          docker build -t "$IMAGE" ./ms-redirect
-          docker push "$IMAGE"
-          echo "IMAGE_URI=$IMAGE" >> $GITHUB_ENV
-
-      - name: Desplegar CloudFormation (redirect)
-        run: |
-          STACK=linkly-redirect
-          aws cloudformation deploy \
-            --stack-name $STACK \
-            --template-file infra/linkly-service.yml \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --parameter-overrides \
-              ServiceName=linkly-redirect \
-              ImageUri=$IMAGE_URI \
-              ContainerPort=8080 \
-              AdminApiUrl="" \
-              BaseDomain=http://localhost:8081 \
-              AppBaseUrl=http://localhost:5000
+          URL=$(aws cloudformation describe-stacks --stack-name linkly-frontend --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
+          echo "frontend_url=$URL" >> $GITHUB_OUTPUT
+          echo "Frontend URL: $URL"
