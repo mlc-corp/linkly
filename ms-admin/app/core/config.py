@@ -1,18 +1,21 @@
-# app/core/config.py (o donde esté tu clase Settings)
 import os
+
 
 class Settings:
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
-    DDB_TABLE: str = os.getenv("DDB_TABLE", "LinklyTable-production") # Asegúrate que el default sea correcto
-    
+    DDB_TABLE: str = os.getenv(
+        "DDB_TABLE", "LinklyTable-production"
+    )  # Asegúrate que el default sea correcto
+
     # --- CAMBIO ---
     # Si DDB_ENDPOINT no está, el default es None
-    DDB_ENDPOINT: str | None = os.getenv("DDB_ENDPOINT") 
+    DDB_ENDPOINT: str | None = os.getenv("DDB_ENDPOINT")
     # -------------
-    
+
     # Ya no necesitas leer estas aquí si dynamo.py no las usa
     # AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "placeholder")
     # AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "placeholder")
+
 
 settings = Settings()
 
