@@ -64,7 +64,7 @@ def test_health_endpoint_ok(client):
 
 
 # ============================================================================
-# TESTS DE API ROUTES - GET /api/links
+# TESTS DE API ROUTES - GET /links
 # ============================================================================
 
 def test_api_links_get_success(client, mock_link_service):
@@ -74,7 +74,7 @@ def test_api_links_get_success(client, mock_link_service):
         {'linkId': 'lk_2', 'slug': 'test2'}
     ]
     
-    response = client.get('/api/links')
+    response = client.get('/links')
     data = response.get_json()
     
     assert response.status_code == 200
@@ -82,28 +82,28 @@ def test_api_links_get_success(client, mock_link_service):
 
 
 def test_api_links_get_connection_error(client, mock_link_service):
-    """Verifica manejo de errores de conexión en GET /api/links."""
+    """Verifica manejo de errores de conexión en GET /links."""
     mock_link_service.get_all_links.side_effect = requests.RequestException()
     
-    response = client.get('/api/links')
+    response = client.get('/links')
     assert response.status_code == 503
 
 
 def test_api_links_get_unexpected_error(client, mock_link_service):
-    """Verifica manejo de errores inesperados en GET /api/links."""
+    """Verifica manejo de errores inesperados en GET /links."""
     mock_link_service.get_all_links.side_effect = Exception("Error inesperado")
     
-    response = client.get('/api/links')
+    response = client.get('/links')
     assert response.status_code == 500
 
 
 # ============================================================================
-# TESTS DE API ROUTES - POST /api/links
+# TESTS DE API ROUTES - POST /links
 # ============================================================================
 
 def test_api_create_link_without_body(client):
-    """Verifica que /api/links devuelve error 400 si no se envían datos."""
-    response = client.post('/api/links', json=None)
+    """Verifica que /links devuelve error 400 si no se envían datos."""
+    response = client.post('/links', json=None)
     data = response.get_json()
     assert response.status_code == 400
     assert 'error' in data
@@ -118,7 +118,7 @@ def test_api_create_link_success(client, mock_link_service):
         'title': 'Test'
     }
     
-    response = client.post('/api/links', json={
+    response = client.post('/links', json={
         'title': 'Test',
         'slug': 'test-slug',
         'destinationUrl': 'https://example.com',
@@ -134,7 +134,7 @@ def test_api_create_link_validation_error(client, mock_link_service):
     """Verifica manejo de errores de validación."""
     mock_link_service.create_link.side_effect = ValueError('El título es requerido')
     
-    response = client.post('/api/links', json={
+    response = client.post('/links', json={
         'title': '',
         'slug': 'test',
         'destinationUrl': 'https://example.com'
@@ -144,10 +144,10 @@ def test_api_create_link_validation_error(client, mock_link_service):
 
 
 def test_api_create_link_connection_error(client, mock_link_service):
-    """Verifica manejo de errores de conexión en POST /api/links."""
+    """Verifica manejo de errores de conexión en POST /links."""
     mock_link_service.create_link.side_effect = requests.RequestException()
     
-    response = client.post('/api/links', json={
+    response = client.post('/links', json={
         'title': 'Test',
         'slug': 'test',
         'destinationUrl': 'https://example.com'
@@ -157,10 +157,10 @@ def test_api_create_link_connection_error(client, mock_link_service):
 
 
 def test_api_create_link_unexpected_error(client, mock_link_service):
-    """Verifica manejo de errores inesperados en POST /api/links."""
+    """Verifica manejo de errores inesperados en POST /links."""
     mock_link_service.create_link.side_effect = Exception("Error inesperado")
     
-    response = client.post('/api/links', json={
+    response = client.post('/links', json={
         'title': 'Test',
         'slug': 'test',
         'destinationUrl': 'https://example.com'
@@ -170,7 +170,7 @@ def test_api_create_link_unexpected_error(client, mock_link_service):
 
 
 # ============================================================================
-# TESTS DE API ROUTES - GET /api/links/<link_id>
+# TESTS DE API ROUTES - GET /links/<link_id>
 # ============================================================================
 
 def test_api_link_detail_success(client, mock_link_service):
@@ -181,7 +181,7 @@ def test_api_link_detail_success(client, mock_link_service):
         'title': 'Test Link'
     }
     
-    response = client.get('/api/links/lk_1')
+    response = client.get('/links/lk_1')
     data = response.get_json()
     
     assert response.status_code == 200
@@ -189,38 +189,38 @@ def test_api_link_detail_success(client, mock_link_service):
 
 
 def test_api_link_detail_not_found(client, mock_link_service):
-    """Verifica que /api/links/<id> responde correctamente si no existe."""
+    """Verifica que /links/<id> responde correctamente si no existe."""
     mock_link_service.get_link_by_id.return_value = None
     
-    response = client.get('/api/links/lk_inexistente')
+    response = client.get('/links/lk_inexistente')
     assert response.status_code == 404
 
 
 def test_api_link_detail_connection_error(client, mock_link_service):
-    """Verifica manejo de errores de conexión en GET /api/links/<id>."""
+    """Verifica manejo de errores de conexión en GET /links/<id>."""
     mock_link_service.get_link_by_id.side_effect = requests.RequestException()
     
-    response = client.get('/api/links/lk_1')
+    response = client.get('/links/lk_1')
     assert response.status_code == 503
 
 
 def test_api_link_detail_unexpected_error(client, mock_link_service):
-    """Verifica manejo de errores inesperados en GET /api/links/<id>."""
+    """Verifica manejo de errores inesperados en GET /links/<id>."""
     mock_link_service.get_link_by_id.side_effect = Exception("Error inesperado")
     
-    response = client.get('/api/links/lk_1')
+    response = client.get('/links/lk_1')
     assert response.status_code == 500
 
 
 # ============================================================================
-# TESTS DE API ROUTES - DELETE /api/links/<link_id>
+# TESTS DE API ROUTES - DELETE /links/<link_id>
 # ============================================================================
 
 def test_api_delete_link_success(client, mock_link_service):
     """Verifica eliminación exitosa de un link."""
     mock_link_service.delete_link.return_value = True
     
-    response = client.delete('/api/links/lk_1')
+    response = client.delete('/links/lk_1')
     assert response.status_code == 204
 
 
@@ -228,28 +228,28 @@ def test_api_delete_link_not_found(client, mock_link_service):
     """Verifica respuesta cuando el link a eliminar no existe."""
     mock_link_service.delete_link.return_value = False
     
-    response = client.delete('/api/links/lk_inexistente')
+    response = client.delete('/links/lk_inexistente')
     assert response.status_code == 404
 
 
 def test_api_delete_link_connection_error(client, mock_link_service):
-    """Verifica manejo de errores de conexión en DELETE /api/links/<id>."""
+    """Verifica manejo de errores de conexión en DELETE /links/<id>."""
     mock_link_service.delete_link.side_effect = requests.RequestException()
     
-    response = client.delete('/api/links/lk_1')
+    response = client.delete('/links/lk_1')
     assert response.status_code == 503
 
 
 def test_api_delete_link_unexpected_error(client, mock_link_service):
-    """Verifica manejo de errores inesperados en DELETE /api/links/<id>."""
+    """Verifica manejo de errores inesperados en DELETE /links/<id>."""
     mock_link_service.delete_link.side_effect = Exception("Error inesperado")
     
-    response = client.delete('/api/links/lk_1')
+    response = client.delete('/links/lk_1')
     assert response.status_code == 500
 
 
 # ============================================================================
-# TESTS DE API ROUTES - GET /api/links/<link_id>/metrics
+# TESTS DE API ROUTES - GET /links/<link_id>/metrics
 # ============================================================================
 
 def test_api_metrics_success(client, mock_link_service):
@@ -258,7 +258,7 @@ def test_api_metrics_success(client, mock_link_service):
         'totals': {'clicks': 100, 'byVariant': {'ig': 50}}
     }
     
-    response = client.get('/api/links/lk_1/metrics')
+    response = client.get('/links/lk_1/metrics')
     data = response.get_json()
     
     assert response.status_code == 200
@@ -269,7 +269,7 @@ def test_api_metrics_not_found(client, mock_link_service):
     """Verifica respuesta cuando no existen métricas."""
     mock_link_service.get_link_metrics.return_value = None
     
-    response = client.get('/api/links/lk_inexistente/metrics')
+    response = client.get('/links/lk_inexistente/metrics')
     assert response.status_code == 404
 
 
@@ -277,7 +277,7 @@ def test_api_metrics_connection_error(client, mock_link_service):
     """Verifica manejo de errores de conexión en GET metrics."""
     mock_link_service.get_link_metrics.side_effect = requests.RequestException()
     
-    response = client.get('/api/links/lk_1/metrics')
+    response = client.get('/links/lk_1/metrics')
     assert response.status_code == 503
 
 
@@ -285,48 +285,8 @@ def test_api_metrics_unexpected_error(client, mock_link_service):
     """Verifica manejo de errores inesperados en GET metrics."""
     mock_link_service.get_link_metrics.side_effect = Exception("Error inesperado")
     
-    response = client.get('/api/links/lk_1/metrics')
+    response = client.get('/links/lk_1/metrics')
     assert response.status_code == 500
-
-
-# ============================================================================
-# TESTS DE API ROUTES - GET /api/health
-# ============================================================================
-
-def test_api_health_check_healthy(client, mock_link_service):
-    """Verifica que /api/health responde con estructura esperada cuando todo está bien."""
-    mock_link_service.health_check.return_value = True
-    
-    response = client.get('/api/health')
-    data = response.get_json()
-    
-    assert response.status_code == 200
-    assert data['ok'] is True
-    assert data['frontend'] == 'healthy'
-    assert data['msAdmin'] == 'healthy'
-
-
-def test_api_health_check_admin_unhealthy(client, mock_link_service):
-    """Verifica health check cuando MS Admin no está saludable."""
-    mock_link_service.health_check.return_value = False
-    
-    response = client.get('/api/health')
-    data = response.get_json()
-    
-    assert response.status_code == 200
-    assert data['msAdmin'] == 'unhealthy'
-
-
-def test_api_health_check_error(client, mock_link_service):
-    """Verifica health check con error de conexión."""
-    mock_link_service.health_check.side_effect = Exception("Connection error")
-    
-    response = client.get('/api/health')
-    data = response.get_json()
-    
-    assert response.status_code == 503
-    assert data['ok'] is False
-
 
 # ============================================================================
 # TESTS DEL LINK SERVICE
@@ -667,16 +627,9 @@ def test_link_service_health_check_request_exception(monkeypatch):
     assert result is False
 
 
-def test_api_health_connection_error(client, mock_link_service):
-    """Verifica que /api/health maneja excepciones."""
-    mock_link_service.health_check.side_effect = requests.RequestException("error")
-    response = client.get('/api/health')
-    assert response.status_code in (503, 500)
-
-
 def test_api_create_link_invalid_json(client):
-    """Verifica que /api/links devuelve 400 si el JSON está malformado."""
-    response = client.post('/api/links', data="not a json", content_type='application/json')
+    """Verifica que /links devuelve 400 si el JSON está malformado."""
+    response = client.post('/links', data="not a json", content_type='application/json')
     assert response.status_code == 400
     data = response.get_json()
     assert 'error' in data
