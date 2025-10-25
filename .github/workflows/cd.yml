@@ -11,7 +11,7 @@ on:
 env:
   AWS_REGION: us-east-1
   DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
-  DDB_TABLE_NAME: LinklyTable
+  DDB_TABLE_NAME: LinklyTable-production
 
 jobs:
   deploy-database:
