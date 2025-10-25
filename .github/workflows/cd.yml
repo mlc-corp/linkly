@@ -57,8 +57,9 @@ jobs:
       - name: Calcular imagen
         id: img
         run: |
-          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-          echo "image=${{ env.DOCKERHUB_USER }}/linkly-ms-redirect:${SHA}" >> $GITHUB_OUTPUT
+          # --- CAMBIO ---
+          # Usamos :latest en lugar del SHA como tag.
+          echo "image=${{ env.DOCKERHUB_USER }}/linkly-ms-redirect:latest" >> $GITHUB_OUTPUT
       - name: Deploy CFN (redirect)
         run: |
           STACK=linkly-redirect
@@ -111,8 +112,9 @@ jobs:
       - name: Calcular imagen
         id: img
         run: |
-          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-          echo "image=${{ env.DOCKERHUB_USER }}/linkly-ms-admin:${SHA}" >> $GITHUB_OUTPUT
+          # --- CAMBIO ---
+          # Usamos :latest en lugar del SHA como tag.
+          echo "image=${{ env.DOCKERHUB_USER }}/linkly-ms-admin:latest" >> $GITHUB_OUTPUT
       - name: Deploy CFN (admin)
         run: |
           STACK=linkly-admin
@@ -165,8 +167,9 @@ jobs:
       - name: Calcular imagen
         id: img
         run: |
-          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-          echo "image=${{ env.DOCKERHUB_USER }}/linkly-frontend:${SHA}" >> $GITHUB_OUTPUT
+          # --- CAMBIO ---
+          # Usamos :latest en lugar del SHA como tag.
+          echo "image=${{ env.DOCKERHUB_USER }}/linkly-frontend:latest" >> $GITHUB_OUTPUT
       - name: Deploy CFN (frontend)
         env:
           ADMIN_URL: ${{ needs.deploy-admin.outputs.admin_url }}
@@ -201,4 +204,4 @@ jobs:
           URL=$(aws cloudformation describe-stacks --stack-name linkly-frontend --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
           echo "frontend_url=$URL" >> $GITHUB_OUTPUT
           echo "Frontend URL: $URL"
-          
+
