@@ -35,7 +35,7 @@ jobs:
               Environment=production
 
   deploy-redirect:
-    name: Deploy · redirect (public ALB)
+    name: Deploy · redirect
     runs-on: ubuntu-latest
     needs: [deploy-database]
     outputs:
@@ -90,7 +90,7 @@ jobs:
           echo "Redirect URL: $URL"
 
   deploy-admin:
-    name: Deploy · admin (internal ALB)
+    name: Deploy · admin
     runs-on: ubuntu-latest
     needs: [deploy-database]
     outputs:
@@ -145,7 +145,7 @@ jobs:
           echo "Admin URL (interno): $URL"
 
   deploy-frontend:
-    name: Deploy · frontend (public ALB)
+    name: Deploy · frontend
     runs-on: ubuntu-latest
     needs: [deploy-redirect, deploy-admin]
     outputs:
