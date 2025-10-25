@@ -2,7 +2,7 @@ name: CI monorepo — Pruebas unitarias
 
 on:
   push:
-    branches: [ main ]     # cualquier rama (incluye feature/x)
+    branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -21,18 +21,19 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       ms_admin: ${{ steps.filter.outputs.ms_admin }}
       ms_redirect: ${{ steps.filter.outputs.ms_redirect }}
+      # Matriz JSON dinámica para el job de docker
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
     steps:
       - name: Checkout (full history for diff)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0      # <-- necesario para que paths-filter compare contra el historial
+          fetch-depth: 0
 
       - name: Paths filter
         id: filter
         uses: dorny/paths-filter@v3
         with:
-          # En push: compara HEAD vs commit anterior en la misma rama
-          # En PR: usa el merge-base PR vs rama base (comportamiento por defecto)
           base: ${{ github.event_name == 'push' && github.event.before || '' }}
           ref:  ${{ github.event_name == 'push' && github.sha || '' }}
 
@@ -43,7 +44,30 @@ jobs:
               - 'ms-admin/**'
             ms_redirect:
               - 'ms-redirect/**'
-            # No listamos infra/README para que NO disparen tests
+
+      # --- CORRECCIÓN ---
+      # Instalar jq para poder construir la matriz JSON
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: set-matrix
+        id: matrix
+        run: |
+          MATRIX_JSON="[]"
+          if [ "${{ steps.filter.outputs.frontend }}" == "true" ]; then
+            MATRIX_JSON=$(echo $MATRIX_JSON | jq '. + [{"id": "frontend", "context": "frontend", "dockerfile": "frontend/Dockerfile", "image_suffix": "linkly-frontend"}]')
+          fi
+          if [ "${{ steps.filter.outputs.ms_admin }}" == "true" ]; then
+            MATRIX_JSON=$(echo $MATRIX_JSON | jq '. + [{"id": "ms-admin", "context": "ms-admin", "dockerfile": "ms-admin/Dockerfile", "image_suffix": "linkly-ms-admin"}]')
+          fi
+          if [ "${{ steps.filter.outputs.ms_redirect }}" == "true" ]; then
+            MATRIX_JSON=$(echo $MATRIX_JSON | jq '. + [{"id": "ms-redirect", "context": "ms-redirect", "dockerfile": "ms-redirect/Dockerfile", "image_suffix": "linkly-ms-redirect"}]')
+          fi
+          
+          # Asegurarse de que el JSON es compacto y en una línea
+          FINAL_JSON=$(echo $MATRIX_JSON | jq -c .)
+          echo "matrix=${FINAL_JSON}" >> $GITHUB_OUTPUT
+          echo "Matriz generada: ${FINAL_JSON}" # Log de depuración
 
   # 2) Pruebas unitarias — frontend (Python) + Sonar + Lints
   test-frontend:
@@ -56,7 +80,6 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -67,33 +90,27 @@ jobs:
             frontend/requirements-dev.txt
             frontend/pyproject.toml
             frontend/setup.cfg
-
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      # --- LINTS (frontend) ---
       - name: Black (check)
         run: |
           black --check app.py routes services
-
       - name: Flake8 (selective paths)
         run: |
           flake8 app.py routes services
-
       - name: Run unit tests (con coverage para Sonar)
         env:
           PYTHONPATH: ${{ github.workspace }}/frontend
         run: |
           pytest tests/unit/
-
       - name: Sonar Scan (frontend)
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # provisto por GitHub
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # tu secreto
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # ej: https://sonarcloud.io o tu SonarQube
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
             -Dsonar.projectBaseDir=${{ github.workspace }}/frontend
@@ -109,7 +126,6 @@ jobs:
         working-directory: ms-admin
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -120,27 +136,21 @@ jobs:
             ms-admin/requirements-dev.txt
             ms-admin/pyproject.toml
             ms-admin/setup.cfg
-
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      # --- LINTS (ms-admin) ---
       - name: Black (check)
         run: |
           black --check app
-
       - name: Flake8 (app)
         run: |
           flake8 app
-
       - name: Run unit tests (con coverage para Sonar)
         env:
           PYTHONPATH: ${{ github.workspace }}/ms-admin
         run: |
           pytest tests/unit/
-
       - name: Sonar Scan (ms-admin)
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
@@ -162,31 +172,23 @@ jobs:
         working-directory: ms-redirect
     steps:
       - uses: actions/checkout@v4
-
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: ms-redirect/package-lock.json
-
       - name: Install deps
         run: npm ci
-
-      # --- LINTS (ms-redirect) ---
       - name: Prettier (check)
         run: npm run format:check
-
       - name: ESLint
         run: npm run lint
-
       - name: Run unit tests (vitest)
         run: npm test --silent -- tests/unit
-
       - name: Run coverage (lcov) para Sonar
         run: |
           npm run coverage
-
       - name: Sonar Scan (ms-redirect)
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
@@ -208,79 +210,58 @@ jobs:
     steps:
       - run: echo "No changed projects. Skipping unit tests."
 
-  # 6) NUEVO — Build Docker SIEMPRE; Push SOLO en push/merge a main (por servicio cambiado)
+  # 6) Build Docker (dinámico)
   docker-build-push:
-    name: Docker · build(+push) por servicio cambiado
+    name: Docker · build(+push) · ${{ matrix.service.id }}
     needs: [changed, test-frontend, test-ms-admin, test-ms-redirect]
     runs-on: ubuntu-latest
+    
+    # Condición de ejecución del job (no fallaron pruebas Y hay algo en la matriz)
     if: |
-      needs.changed.outputs.frontend == 'true' ||
-      needs.changed.outputs.ms_admin == 'true' ||
-      needs.changed.outputs.ms_redirect == 'true'
+      !failure() &&
+      needs.changed.outputs.matrix != '[]'
+
+    # Matriz dinámica basada en la salida del job 'changed'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - id: frontend
-            changed: ${{ needs.changed.outputs.frontend }}
-            context: frontend
-            dockerfile: frontend/Dockerfile
-            image_suffix: linkly-frontend
-          - id: ms-admin
-            changed: ${{ needs.changed.outputs.ms_admin }}
-            context: ms-admin
-            dockerfile: ms-admin/Dockerfile
-            image_suffix: linkly-ms-admin
-          - id: ms-redirect
-            changed: ${{ needs.changed.outputs.ms_redirect }}
-            context: ms-redirect
-            dockerfile: ms-redirect/Dockerfile
-            image_suffix: linkly-ms-redirect
+        service: ${{ fromJson(needs.changed.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Skip si este servicio no cambió
-        id: skip
-        run: |
-          if [ "${{ matrix.changed }}" != "true" ]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          fi
-
       - name: Set up QEMU
-        if: steps.skip.outputs.skip != 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: steps.skip.outputs.skip != 'true'
         uses: docker/setup-buildx-action@v3
 
-      # Login solo en push/merge a main
       - name: Login to Docker Hub
-        if: steps.skip.outputs.skip != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Solo loguearse si vamos a hacer push (en main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Compute image tags
-        if: steps.skip.outputs.skip != 'true'
         id: meta
         run: |
-          REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_suffix }}"
+          REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service.image_suffix }}"
           echo "repo=${REPO}" >> $GITHUB_OUTPUT
           echo "sha_tag=${REPO}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
           echo "latest_tag=${REPO}:latest" >> $GITHUB_OUTPUT
 
       - name: Build (PR) / Build+Push (main)
-        if: steps.skip.outputs.skip != 'true'
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
+          # Push solo en merge a 'main'
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: |
             ${{ steps.meta.outputs.sha_tag }}
             ${{ steps.meta.outputs.latest_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
