@@ -2,7 +2,6 @@ name: CD — Deploy Linkly (multi-ALB)
 
 on:
   workflow_run:
-    # Se dispara después de que la CI (que construye y publica las imágenes) termine
     workflows: ["CI monorepo — Pruebas unitarias"]
     types: [completed]
   workflow_dispatch:
@@ -10,19 +9,14 @@ on:
 env:
   AWS_REGION: us-east-1
   DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
-  DDB_TABLE_NAME: LinklyTable # Nombre de la tabla de DynamoDB
+  DDB_TABLE_NAME: LinklyTable
 
 jobs:
-  # -------------------------------------------------------------
-  # Job: Deploy database (No depende de la red, solo de las credenciales)
-  # -------------------------------------------------------------
   deploy-database:
     name: Deploy · database (DynamoDB)
     runs-on: ubuntu-latest
-    # Ya no necesita 'deploy-network'
     steps:
       - uses: actions/checkout@v4
-
       - name: AWS creds (temporales)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -30,28 +24,22 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-      
       - name: Deploy DynamoDB Table (idempotente)
         run: |
           aws cloudformation deploy \
             --stack-name linkly-database \
             --template-file infra/database.yml \
             --parameter-overrides \
-              Environment=production # Usando el nombre de tabla del env
+              Environment=production
 
-  # -------------------------------------------------------------
-  # Job: Deploy redirect (API pública)
-  # -------------------------------------------------------------
   deploy-redirect:
     name: Deploy · redirect (public ALB)
     runs-on: ubuntu-latest
-    # Ahora solo depende de la DB
     needs: [deploy-database]
     outputs:
       redirect_url: ${{ steps.out.outputs.redirect_url }}
     steps:
       - uses: actions/checkout@v4
-
       - name: AWS creds (temporales)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -59,27 +47,24 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
       - name: Calcular imagen
         id: img
         run: |
           SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
           echo "image=${{ env.DOCKERHUB_USER }}/linkly-ms-redirect:${SHA}" >> $GITHUB_OUTPUT
-
       - name: Deploy CFN (redirect)
         run: |
           STACK=linkly-redirect
           IMAGE="${{ steps.img.outputs.image }}"
-          # --- OBTENIENDO VALORES DE SECRETS EN LUGAR DE OUTPUTS DE NETWORK ---
           VPC="${{ secrets.VPC_ID }}"
           SUBNETS="${{ secrets.SUBNET_IDS }}"
-          # --- CIDR ya no es necesario para el servicio ---
+          # --- CORRECCIÓN: Volver a pasar el VpcCidr desde secrets ---
+          CIDR="${{ secrets.VPC_CIDR }}"
 
           aws cloudformation deploy \
             --stack-name $STACK \
@@ -91,12 +76,12 @@ jobs:
               ContainerPort=8080 \
               VpcId=$VPC \
               SubnetIds=$SUBNETS \
+              VpcCidr=$CIDR \
               PublicALB=true \
               AdminApiUrl="" \
               BaseDomain="" \
               AppBaseUrl="" \
               DdbTable=${{ env.DDB_TABLE_NAME }}
-
       - name: Output URL redirect
         id: out
         run: |
@@ -104,19 +89,14 @@ jobs:
           echo "redirect_url=$URL" >> $GITHUB_OUTPUT
           echo "Redirect URL: $URL"
 
-  # -------------------------------------------------------------
-  # Job: Deploy admin (API interna)
-  # -------------------------------------------------------------
   deploy-admin:
     name: Deploy · admin (internal ALB)
     runs-on: ubuntu-latest
-    # Ahora solo depende de la DB
     needs: [deploy-database]
     outputs:
       admin_url: ${{ steps.out.outputs.admin_url }}
     steps:
       - uses: actions/checkout@v4
-
       - name: AWS creds (temporales)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -124,29 +104,25 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
       - name: Calcular imagen
         id: img
         run: |
           SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
           echo "image=${{ env.DOCKERHUB_USER }}/linkly-ms-admin:${SHA}" >> $GITHUB_OUTPUT
-
       - name: Deploy CFN (admin)
         run: |
           STACK=linkly-admin
           IMAGE="${{ steps.img.outputs.image }}"
-          # --- OBTENIENDO VALORES DE SECRETS EN LUGAR DE OUTPUTS DE NETWORK ---
           VPC="${{ secrets.VPC_ID }}"
           SUBNETS="${{ secrets.SUBNET_IDS }}"
-          # --- CIDR ya no es necesario para el servicio ---
+          # --- CORRECCIÓN: Volver a pasar el VpcCidr (requerido para PublicALB=false) ---
+          CIDR="${{ secrets.VPC_CIDR }}"
           
-          # ALB interno: PublicALB=false; solo accesible dentro de la VPC
           aws cloudformation deploy \
             --stack-name $STACK \
             --template-file infra/linkly-service.yml \
@@ -157,12 +133,12 @@ jobs:
               ContainerPort=8080 \
               VpcId=$VPC \
               SubnetIds=$SUBNETS \
+              VpcCidr=$CIDR \
               PublicALB=false \
               AdminApiUrl="" \
               BaseDomain="" \
               AppBaseUrl="" \
               DdbTable=${{ env.DDB_TABLE_NAME }}
-
       - name: Output URL admin (interno)
         id: out
         run: |
@@ -170,19 +146,14 @@ jobs:
           echo "admin_url=$URL" >> $GITHUB_OUTPUT
           echo "Admin URL (interno): $URL"
 
-  # -------------------------------------------------------------
-  # Job: Deploy frontend (Aplicación web)
-  # -------------------------------------------------------------
   deploy-frontend:
     name: Deploy · frontend (public ALB)
     runs-on: ubuntu-latest
-    # Ahora depende de que Admin y Redirect estén desplegados
     needs: [deploy-redirect, deploy-admin]
     outputs:
       frontend_url: ${{ steps.out.outputs.frontend_url }}
     steps:
       - uses: actions/checkout@v4
-
       - name: AWS creds (temporales)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -190,19 +161,16 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
       - name: Calcular imagen
         id: img
         run: |
           SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
           echo "image=${{ env.DOCKERHUB_USER }}/linkly-frontend:${SHA}" >> $GITHUB_OUTPUT
-
       - name: Deploy CFN (frontend)
         env:
           ADMIN_URL: ${{ needs.deploy-admin.outputs.admin_url }}
@@ -210,10 +178,10 @@ jobs:
         run: |
           STACK=linkly-frontend
           IMAGE="${{ steps.img.outputs.image }}"
-          # --- OBTENIENDO VALORES DE SECRETS EN LUGAR DE OUTPUTS DE NETWORK ---
           VPC="${{ secrets.VPC_ID }}"
           SUBNETS="${{ secrets.SUBNET_IDS }}"
-          # --- CIDR ya no es necesario para el servicio ---
+          # --- CORRECCIÓN: Volver a pasar el VpcCidr desde secrets ---
+          CIDR="${{ secrets.VPC_CIDR }}"
 
           aws cloudformation deploy \
             --stack-name $STACK \
@@ -225,12 +193,12 @@ jobs:
               ContainerPort=5000 \
               VpcId=$VPC \
               SubnetIds=$SUBNETS \
+              VpcCidr=$CIDR \
               PublicALB=true \
               AdminApiUrl=$ADMIN_URL \
               BaseDomain=$REDIRECT_URL \
               AppBaseUrl="" \
               DdbTable=${{ env.DDB_TABLE_NAME }}
-
       - name: Output URL frontend
         id: out
         run: |

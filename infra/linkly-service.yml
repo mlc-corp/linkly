@@ -14,7 +14,7 @@ Parameters:
     Type: List<AWS::EC2::Subnet::Id>
   VpcCidr:
     Type: String
-    Description: CIDR de la VPC (para SG interno)
+    Description: "CIDR de la VPC (para SG interno)"
   PublicALB:
     Type: String
     AllowedValues: ["true", "false"]
@@ -157,7 +157,7 @@ Resources:
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
+          AssignPublicIp: ENABLED # Requerido para que Fargate descargue la imagen
           SecurityGroups: [ !Ref ServiceSG ]
           Subnets: !Ref SubnetIds
       TaskDefinition: !Ref TaskDefinition
