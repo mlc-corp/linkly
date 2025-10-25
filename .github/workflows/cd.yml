@@ -201,4 +201,4 @@ jobs:
           URL=$(aws cloudformation describe-stacks --stack-name linkly-frontend --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
           echo "frontend_url=$URL" >> $GITHUB_OUTPUT
           echo "Frontend URL: $URL"
-
+          
