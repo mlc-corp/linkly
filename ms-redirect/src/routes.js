@@ -24,11 +24,11 @@ async function handleRedirect(req, res, variantFromPath) {
     // Intencional: si fallan los headers de Cloudflare, ignoramos y usamos defaults
   }
 
-  await incrementMetrics({ slug, variant, country, device }); 
-  
+  await incrementMetrics({ slug, variant, country, device });
+
   incrementMetrics({ slug, variant, country, device })
-    .then(r => console.log("[metrics] ok", r?.$metadata))
-    .catch(e => console.error("[metrics] error", e)); 
+    .then((r) => console.log("[metrics] ok", r?.$metadata))
+    .catch((e) => console.error("[metrics] error", e));
 
   return res.redirect(302, link.destinationUrl);
 }
