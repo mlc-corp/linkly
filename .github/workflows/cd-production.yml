@@ -29,7 +29,7 @@ jobs:
       - name: Deploy DynamoDB Table (idempotente)
         run: |
           aws cloudformation deploy \
-            --stack-name linkly-database-production \
+            --stack-name linkly-database \
             --template-file infra/database.yml \
             --parameter-overrides \
               Environment=production
