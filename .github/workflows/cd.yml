@@ -134,7 +134,7 @@ jobs:
               VpcId=$VPC \
               SubnetIds=$SUBNETS \
               VpcCidr=$CIDR \
-              PublicALB=false \
+              PublicALB=true \
               LabRoleArn=${{ secrets.LAB_ROLE_ARN }} \
               DdbTable=${{ env.DDB_TABLE_NAME }}
       - name: Output URL admin (interno)
