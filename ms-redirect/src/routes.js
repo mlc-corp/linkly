@@ -12,7 +12,7 @@ async function handleRedirect(req, res, variantFromPath) {
   const link = await getLinkBySlug(slug);
   if (!link) return res.status(404).json({ error: "Not found" });
 
-  const v = variantFromPath || "default";
+  const variant = variantFromPath || "default"; // ✅ renombrado para consistencia
 
   let country = "UN";
   let device = "unknown";
@@ -21,11 +21,10 @@ async function handleRedirect(req, res, variantFromPath) {
     country = (ctx?.country || "UN").toUpperCase();
     device = ctx?.device || "unknown";
   } catch {
-    // Intencional: si fallan los headers de Cloudflare, ignoramos y usamos defaults
+    // Intencional: si fallan los headers de CloudFront/Cloudflare, usamos defaults
   }
 
-  await incrementMetrics({ slug, variant, country, device });
-
+  // ✅ Solo un llamado, con logs incluidos (opcional)
   incrementMetrics({ slug, variant, country, device })
     .then((r) => console.log("[metrics] ok", r?.$metadata))
     .catch((e) => console.error("[metrics] error", e));
