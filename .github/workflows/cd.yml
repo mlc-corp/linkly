@@ -63,7 +63,6 @@ jobs:
           IMAGE="${{ steps.img.outputs.image }}"
           VPC="${{ secrets.VPC_ID }}"
           SUBNETS="${{ secrets.SUBNET_IDS }}"
-          # --- CORRECCIÓN: Volver a pasar el VpcCidr desde secrets ---
           CIDR="${{ secrets.VPC_CIDR }}"
 
           aws cloudformation deploy \
@@ -78,9 +77,7 @@ jobs:
               SubnetIds=$SUBNETS \
               VpcCidr=$CIDR \
               PublicALB=true \
-              AdminApiUrl="" \
-              BaseDomain="" \
-              AppBaseUrl="" \
+              LabRoleArn=${{ secrets.LAB_ROLE_ARN }} \
               DdbTable=${{ env.DDB_TABLE_NAME }}
       - name: Output URL redirect
         id: out
@@ -120,7 +117,6 @@ jobs:
           IMAGE="${{ steps.img.outputs.image }}"
           VPC="${{ secrets.VPC_ID }}"
           SUBNETS="${{ secrets.SUBNET_IDS }}"
-          # --- CORRECCIÓN: Volver a pasar el VpcCidr (requerido para PublicALB=false) ---
           CIDR="${{ secrets.VPC_CIDR }}"
           
           aws cloudformation deploy \
@@ -135,9 +131,7 @@ jobs:
               SubnetIds=$SUBNETS \
               VpcCidr=$CIDR \
               PublicALB=false \
-              AdminApiUrl="" \
-              BaseDomain="" \
-              AppBaseUrl="" \
+              LabRoleArn=${{ secrets.LAB_ROLE_ARN }} \
               DdbTable=${{ env.DDB_TABLE_NAME }}
       - name: Output URL admin (interno)
         id: out
@@ -180,7 +174,6 @@ jobs:
           IMAGE="${{ steps.img.outputs.image }}"
           VPC="${{ secrets.VPC_ID }}"
           SUBNETS="${{ secrets.SUBNET_IDS }}"
-          # --- CORRECCIÓN: Volver a pasar el VpcCidr desde secrets ---
           CIDR="${{ secrets.VPC_CIDR }}"
 
           aws cloudformation deploy \
@@ -195,6 +188,7 @@ jobs:
               SubnetIds=$SUBNETS \
               VpcCidr=$CIDR \
               PublicALB=true \
+              LabRoleArn=${{ secrets.LAB_ROLE_ARN }} \
               AdminApiUrl=$ADMIN_URL \
               BaseDomain=$REDIRECT_URL \
               AppBaseUrl="" \
@@ -205,3 +199,4 @@ jobs:
           URL=$(aws cloudformation describe-stacks --stack-name linkly-frontend --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
           echo "frontend_url=$URL" >> $GITHUB_OUTPUT
           echo "Frontend URL: $URL"
+

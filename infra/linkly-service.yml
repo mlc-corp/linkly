@@ -19,6 +19,13 @@ Parameters:
     Type: String
     AllowedValues: ["true", "false"]
     Description: "true = ALB público, false = ALB interno (solo VPC)"
+  
+  # --- NUEVO PARÁMETRO ---
+  # Se añade el parámetro para recibir el Rol de Tarea (con permisos de DDB)
+  LabRoleArn:
+    Type: String
+    Description: "IAM Role ARN para que la tarea acceda a DynamoDB"
+
   AdminApiUrl:
     Type: String
     Default: ""
@@ -47,6 +54,7 @@ Resources:
       LogGroupName: !Sub "/ecs/${ServiceName}"
       RetentionInDays: 7
 
+  # Rol de Ejecución (para iniciar el contenedor) - Esto se queda igual
   TaskExecRole:
     Type: AWS::IAM::Role
     Properties:
@@ -67,7 +75,12 @@ Resources:
       Memory: "512"
       NetworkMode: awsvpc
       RequiresCompatibilities: [FARGATE]
-      ExecutionRoleArn: !GetAtt TaskExecRole.Arn
+      ExecutionRoleArn: !GetAtt TaskExecRole.Arn # Rol de Ejecución
+      
+      # --- CORRECCIÓN ---
+      # Se asigna el Rol de Tarea (con permisos de DDB)
+      TaskRoleArn: !Ref LabRoleArn
+
       ContainerDefinitions:
         - Name: !Ref ServiceName
           Image: !Ref ImageUri
@@ -157,7 +170,7 @@ Resources:
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED # Requerido para que Fargate descargue la imagen
+          AssignPublicIp: ENABLED
           SecurityGroups: [ !Ref ServiceSG ]
           Subnets: !Ref SubnetIds
       TaskDefinition: !Ref TaskDefinition
@@ -170,3 +183,4 @@ Outputs:
   ServiceUrl:
     Description: URL (ALB DNS)
     Value: !Sub "http://${ALB.DNSName}"
+
