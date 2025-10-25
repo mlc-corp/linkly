@@ -20,11 +20,10 @@ Parameters:
     AllowedValues: ["true", "false"]
     Description: "true = ALB público, false = ALB interno (solo VPC)"
   
-  # --- NUEVO PARÁMETRO ---
-  # Se añade el parámetro para recibir el Rol de Tarea (con permisos de DDB)
+  # Parámetro para recibir el rol de IAM pre-creado
   LabRoleArn:
     Type: String
-    Description: "IAM Role ARN para que la tarea acceda a DynamoDB"
+    Description: "IAM Role ARN para que la tarea acceda a DynamoDB y se ejecute"
 
   AdminApiUrl:
     Type: String
@@ -54,18 +53,9 @@ Resources:
       LogGroupName: !Sub "/ecs/${ServiceName}"
       RetentionInDays: 7
 
-  # Rol de Ejecución (para iniciar el contenedor) - Esto se queda igual
-  TaskExecRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: { Service: ecs-tasks.amazonaws.com }
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  # --- RECURSO ELIMINADO ---
+  # Se eliminó 'TaskExecRole' porque no tenemos permisos para crearlo.
+  # Usaremos 'LabRoleArn' en su lugar.
 
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -75,11 +65,11 @@ Resources:
       Memory: "512"
       NetworkMode: awsvpc
       RequiresCompatibilities: [FARGATE]
-      ExecutionRoleArn: !GetAtt TaskExecRole.Arn # Rol de Ejecución
       
       # --- CORRECCIÓN ---
-      # Se asigna el Rol de Tarea (con permisos de DDB)
-      TaskRoleArn: !Ref LabRoleArn
+      # Usamos el 'LabRoleArn' (pasado como parámetro) para AMBOS roles.
+      ExecutionRoleArn: !Ref LabRoleArn # Rol para que AWS inicie el contenedor
+      TaskRoleArn: !Ref LabRoleArn      # Rol para que la app hable con DynamoDB
 
       ContainerDefinitions:
         - Name: !Ref ServiceName
@@ -145,11 +135,11 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VVpcId
       Port: !Ref ContainerPort
       Protocol: HTTP
       TargetType: ip
-      HealthCheckPath: /health
+      HealthCheckPath: /health # Asegúrate que tus apps respondan en /health
 
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -170,7 +160,9 @@ Resources:
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
+          # Asignar IP pública es necesario si tus subredes son públicas
+          # y necesitas jalar la imagen de Docker Hub (que está en internet)
+          AssignPublicIp: ENABLED 
           SecurityGroups: [ !Ref ServiceSG ]
           Subnets: !Ref SubnetIds
       TaskDefinition: !Ref TaskDefinition
