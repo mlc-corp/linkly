@@ -1,8 +1,8 @@
-name: CD — Deploy staging
+name: CD — Deploy production
 
 on:
   workflow_run:
-    workflows: ["CI monorepo — Pruebas unitarias"]
+    workflows: ["CD — Deploy staging"]
     types: [completed]
     branches:
       - main
