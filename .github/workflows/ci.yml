@@ -2,12 +2,11 @@ name: CI monorepo — Pruebas unitarias
 
 on:
   push:
-    branches: [ main ]     # cualquier rama (incluye feature/x)
+    branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
-# Evita carreras si hay múltiples pushes a la misma rama/PR
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
@@ -25,14 +24,12 @@ jobs:
       - name: Checkout (full history for diff)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0      # <-- necesario para que paths-filter compare contra el historial
+          fetch-depth: 0
 
       - name: Paths filter
         id: filter
         uses: dorny/paths-filter@v3
         with:
-          # En push: compara HEAD vs commit anterior en la misma rama
-          # En PR: usa el merge-base PR vs rama base (comportamiento por defecto)
           base: ${{ github.event_name == 'push' && github.event.before || '' }}
           ref:  ${{ github.event_name == 'push' && github.sha || '' }}
 
@@ -43,9 +40,8 @@ jobs:
               - 'ms-admin/**'
             ms_redirect:
               - 'ms-redirect/**'
-            # No listamos infra/README para que NO disparen tests
 
-  # 2) Pruebas unitarias — frontend (Python) + Sonar + Lints
+  # 2) Pruebas unitarias — frontend
   test-frontend:
     name: Pruebas unitarias · frontend
     needs: changed
@@ -56,7 +52,6 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -67,38 +62,32 @@ jobs:
             frontend/requirements-dev.txt
             frontend/pyproject.toml
             frontend/setup.cfg
-
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      # --- LINTS (frontend) ---
       - name: Black (check)
         run: |
           black --check app.py routes services
-
       - name: Flake8 (selective paths)
         run: |
           flake8 app.py routes services
-
       - name: Run unit tests (con coverage para Sonar)
         env:
           PYTHONPATH: ${{ github.workspace }}/frontend
         run: |
           pytest tests/unit/
-
       - name: Sonar Scan (frontend)
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # provisto por GitHub
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # tu secreto
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # ej: https://sonarcloud.io o tu SonarQube
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
             -Dsonar.projectBaseDir=${{ github.workspace }}/frontend
 
-  # 3) Pruebas unitarias — ms-admin (Python) + Sonar + Lints
+  # 3) Pruebas unitarias — ms-admin
   test-ms-admin:
     name: Pruebas unitarias · ms-admin
     needs: changed
@@ -109,7 +98,6 @@ jobs:
         working-directory: ms-admin
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -120,27 +108,21 @@ jobs:
             ms-admin/requirements-dev.txt
             ms-admin/pyproject.toml
             ms-admin/setup.cfg
-
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      # --- LINTS (ms-admin) ---
       - name: Black (check)
         run: |
           black --check app
-
       - name: Flake8 (app)
         run: |
           flake8 app
-
       - name: Run unit tests (con coverage para Sonar)
         env:
           PYTHONPATH: ${{ github.workspace }}/ms-admin
         run: |
           pytest tests/unit/
-
       - name: Sonar Scan (ms-admin)
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
@@ -151,7 +133,7 @@ jobs:
           args: >
             -Dsonar.projectBaseDir=${{ github.workspace }}/ms-admin
 
-  # 4) Pruebas unitarias — ms-redirect (Node / Vitest) + Sonar + Lints
+  # 4) Pruebas unitarias — ms-redirect
   test-ms-redirect:
     name: Pruebas unitarias · ms-redirect
     needs: changed
@@ -162,31 +144,23 @@ jobs:
         working-directory: ms-redirect
     steps:
       - uses: actions/checkout@v4
-
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: ms-redirect/package-lock.json
-
       - name: Install deps
         run: npm ci
-
-      # --- LINTS (ms-redirect) ---
       - name: Prettier (check)
         run: npm run format:check
-
       - name: ESLint
         run: npm run lint
-
       - name: Run unit tests (vitest)
         run: npm test --silent -- tests/unit
-
       - name: Run coverage (lcov) para Sonar
         run: |
           npm run coverage
-
       - name: Sonar Scan (ms-redirect)
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
@@ -208,15 +182,28 @@ jobs:
     steps:
       - run: echo "No changed projects. Skipping unit tests."
 
-  # 6) NUEVO — Build Docker SIEMPRE; Push SOLO en push/merge a main (por servicio cambiado)
+  # 6) Build Docker
   docker-build-push:
     name: Docker · build(+push) por servicio cambiado
     needs: [changed, test-frontend, test-ms-admin, test-ms-redirect]
     runs-on: ubuntu-latest
+    
+    # --- ¡CAMBIO CRÍTICO! ---
+    # Esta condición 'if' es la solución.
+    # 1. Se ejecuta si CUALQUIERA de los tests falló O se saltó (pero no falló).
+    # 2. Y si al menos UN servicio cambió (para evitar correr si no cambió nada).
     if: |
-      needs.changed.outputs.frontend == 'true' ||
-      needs.changed.outputs.ms_admin == 'true' ||
-      needs.changed.outputs.ms_redirect == 'true'
+      (
+        (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped') &&
+        (needs.test-ms-admin.result == 'success' || needs.test-ms-admin.result == 'skipped') &&
+        (needs.test-ms-redirect.result == 'success' || needs.test-ms-redirect.result == 'skipped')
+      ) && (
+        needs.changed.outputs.frontend == 'true' ||
+        needs.changed.outputs.ms_admin == 'true' ||
+        needs.changed.outputs.ms_redirect == 'true'
+      )
+    # --- FIN DEL CAMBIO ---
+
     strategy:
       fail-fast: false
       matrix:
@@ -255,7 +242,6 @@ jobs:
         if: steps.skip.outputs.skip != 'true'
         uses: docker/setup-buildx-action@v3
 
-      # Login solo en push/merge a main
       - name: Login to Docker Hub
         if: steps.skip.outputs.skip != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3

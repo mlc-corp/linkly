@@ -5,9 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI(title="MS Admin (FastAPI) - Linkly", version="1.0")
 
 
-origins = [
-    "*",
-]
+origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
