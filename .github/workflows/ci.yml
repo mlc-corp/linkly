@@ -189,15 +189,12 @@ jobs:
     runs-on: ubuntu-latest
     
     # --- ¡CAMBIO CRÍTICO! ---
-    # Esta condición 'if' es la solución.
-    # 1. Se ejecuta si CUALQUIERA de los tests falló O se saltó (pero no falló).
-    # 2. Y si al menos UN servicio cambió (para evitar correr si no cambió nada).
+    # Esta es la nueva condición 'if'.
+    # 1. '!failure()' : Ejecuta este job SIEMPRE Y CUANDO
+    #    ninguno de los 'needs:' haya fallado. (Ignora los 'skipped').
+    # 2. '&& (...)': Y solo si al menos un servicio cambió.
     if: |
-      (
-        (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped') &&
-        (needs.test-ms-admin.result == 'success' || needs.test-ms-admin.result == 'skipped') &&
-        (needs.test-ms-redirect.result == 'success' || needs.test-ms-redirect.result == 'skipped')
-      ) && (
+      !failure() && (
         needs.changed.outputs.frontend == 'true' ||
         needs.changed.outputs.ms_admin == 'true' ||
         needs.changed.outputs.ms_redirect == 'true'
@@ -270,3 +267,4 @@ jobs:
             ${{ steps.meta.outputs.latest_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
