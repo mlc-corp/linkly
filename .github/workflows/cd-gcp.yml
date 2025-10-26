@@ -56,6 +56,14 @@ jobs:
       #   with:
       #     credentials_json: secrets.GCP_SA_KEY_JSON
       # -----------------------------------------------------------------
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      - name: 'Test gcloud auth'
+        run: |-
+          gcloud auth list
+          gcloud projects describe ${{ env.GCP_PROJECT_ID }} --format='value(projectNumber)'
+          echo "Si ves el número de proyecto arriba, gcloud SÍ se autenticó."
 
       # 3. Instalar Terraform
       - name: Setup Terraform
@@ -79,7 +87,6 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ${{ env.TERRAFORM_DIR }}
         env:
-          TF_LOG: DEBUG
           # Pasa las variables de GitHub (env y secrets) 
           # a las variables de Terraform (TF_VAR_...)
           TF_VAR_gcp_project_id: ${{ env.GCP_PROJECT_ID }}
