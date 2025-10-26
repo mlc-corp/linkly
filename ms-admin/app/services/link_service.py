@@ -6,7 +6,7 @@ from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.firestore_v1.client import Client
 from google.cloud.firestore_v1 import Transaction, transactional
 
-from app.db.firestore_client import get_db
+from app.db.dynamo import get_db
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
