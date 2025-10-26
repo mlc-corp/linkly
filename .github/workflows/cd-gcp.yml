@@ -79,6 +79,7 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ${{ env.TERRAFORM_DIR }}
         env:
+          TF_LOG: DEBUG
           # Pasa las variables de GitHub (env y secrets) 
           # a las variables de Terraform (TF_VAR_...)
           TF_VAR_gcp_project_id: ${{ env.GCP_PROJECT_ID }}
