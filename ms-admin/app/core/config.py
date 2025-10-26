@@ -1,30 +1,33 @@
 import os
+# --- CAMBIO ---
+# Quita os y usa pydantic-settings para leer variables de entorno automáticamente
+from pydantic_settings import BaseSettings
+# -------------
 
+# Define una clase que hereda de BaseSettings
+class Settings(BaseSettings):
+    # --- QUITAMOS LAS VARIABLES DE AWS ---
+    # AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+    # DDB_TABLE: str = os.getenv("DDB_TABLE", "LinklyTable-production")
+    # DDB_ENDPOINT: str | None = os.getenv("DDB_ENDPOINT")
+    # ------------------------------------
 
-class Settings:
-    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
-    DDB_TABLE: str = os.getenv(
-        "DDB_TABLE", "LinklyTable-production"
-    )  # Asegúrate que el default sea correcto
+    # --- AÑADIMOS LAS VARIABLES DE FIRESTORE ---
+    # pydantic-settings leerá estas variables del entorno (las que pone Terraform/Cloud Run).
+    # Si no las encuentra, usará estos valores por defecto.
+    LINKS_COLLECTION: str = "links"
+    SLUGS_COLLECTION: str = "slugs"
+    METRICS_COLLECTION: str = "metrics"
+    # ------------------------------------------
 
-    # --- CAMBIO ---
-    # Si DDB_ENDPOINT no está, el default es None
-    DDB_ENDPOINT: str | None = os.getenv("DDB_ENDPOINT")
-    # -------------
+    # Puedes añadir aquí otras configuraciones que necesites leer del entorno
+    # Por ejemplo, si necesitaras el ID del proyecto en el código:
+    # GCP_PROJECT_ID: str = "default-project-id"
 
-    # Ya no necesitas leer estas aquí si dynamo.py no las usa
-    # AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "placeholder")
-    # AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "placeholder")
+    # Opcional: Configuración para leer desde un archivo .env localmente
+    # model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
-
+# Crea una instancia única de la configuración que tu app puede importar
 settings = Settings()
 
-# --- VERIFICACIÓN ADICIONAL en dynamo.py ---
-# Asegúrate que la lógica que usa DDB_ENDPOINT sea robusta:
-# (La versión que te di antes ya lo hace bien)
-# if DDB_ENDPOINT: # Esto será falso si es None o ""
-#    logger.warning(f"🔸 Usando endpoint DynamoDB LOCAL: {DDB_ENDPOINT}")
-#    _dynamodb_resource = session.resource("dynamodb", endpoint_url=DDB_ENDPOINT, ...)
-# else:
-#    logger.info(f"🔹 Usando endpoint DynamoDB regional...")
-#    _dynamodb_resource = session.resource("dynamodb", config=boto_config)
+# --- YA NO NECESITAS LA VERIFICACIÓN DE DDB_ENDPOINT ---
