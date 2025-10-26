@@ -1,11 +1,11 @@
 name: CD — Deploy staging
 
 on:
-  workflow_run:
-    workflows: ["CI monorepo — Pruebas unitarias"]
-    types: [completed]
-    branches:
-      - main
+  #workflow_run:
+  #  workflows: ["CI monorepo — Pruebas unitarias"]
+  #  types: [completed]
+  #  branches:
+  #    - main
   workflow_dispatch:
 
 env:

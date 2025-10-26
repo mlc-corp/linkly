@@ -1,6 +1,5 @@
 fastapi
 uvicorn[standard]
-boto3
 python-dotenv
 httpx
 pytest
@@ -9,3 +8,5 @@ pytest-cov
 pytest-html
 black
 flake8
+firebase-admin
+google-cloud-firestore
