@@ -1,11 +1,11 @@
 name: CD — Deploy production
 
 on:
-  workflow_run:
-    workflows: ["CD — Deploy staging"]
-    types: [completed]
-    branches:
-      - main
+  #workflow_run:
+  #  workflows: ["CD — Deploy staging"]
+  #  types: [completed]
+  #  branches:
+  #    - main
   workflow_dispatch:
 
 env:
