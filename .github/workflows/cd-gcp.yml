@@ -1,0 +1,86 @@
+name: CD - Deploy Production (GCP)
+
+on:
+  workflow_run:
+    workflows: ["CI gcp"] # Se activa cuando el workflow "CI gcp" termina
+    types: [completed]
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  # --- Variables de Configuración ---
+  # El ID de tu proyecto de GCP (debes crearlo en secrets)
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  # Tu usuario de Docker Hub (debes crearlo en secrets)
+  DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+  # La región (la puedes dejar fija si siempre es la misma)
+  GCP_REGION: us-central1
+  # Ruta a la carpeta de infraestructura
+  TERRAFORM_DIR: ./infra
+
+# --- Permisos para Autenticación ---
+# Permisos necesarios para que GitHub Actions se autentique
+# con Google Cloud usando Workload Identity Federation (WIF).
+permissions:
+  contents: 'read'
+  id-token: 'write'
+
+jobs:
+  deploy-production:
+    name: Deploy · Infraestructura (TerraFORM)
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Bajar el código del repositorio
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Autenticación con GCP (Método RECOMENDADO: WIF)
+      # No usas una llave JSON. Te autenticas de forma segura.
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          # El "Workload Identity Provider" que creas en GCP (ver nota abajo)
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          # El email de la cuenta de servicio que le das permiso a GitHub para "usar"
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+          
+      # --- (Alternativa) Autenticación con Llave JSON (menos seguro) ---
+      # Si no quieres configurar WIF, puedes usar una llave JSON.
+      # Comenta el paso anterior y descomenta este:
+      # - name: Authenticate to Google Cloud (JSON Key)
+      #   id: auth
+      #   uses: 'google-github-actions/auth@v2'
+      #   with:
+      #     credentials_json: secrets.GCP_SA_KEY_JSON
+      # -----------------------------------------------------------------
+
+      # 3. Instalar Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # 4. Terraform Init
+      # Inicializa terraform y descarga el provider de Google
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+
+      # 5. Terraform Validate
+      # Revisa que la sintaxis de tu .tf sea correcta
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        
+      # 6. Terraform Apply
+      # ¡Aquí ocurre la magia! Aplica todos los cambios.
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        env:
+          # Pasa las variables de GitHub (env y secrets) 
+          # a las variables de Terraform (TF_VAR_...)
+          TF_VAR_gcp_project_id: ${{ env.GCP_PROJECT_ID }}
+          TF_VAR_gcp_region: ${{ env.GCP_REGION }}
+          TF_VAR_docker_hub_user: ${{ env.DOCKERHUB_USER }}
