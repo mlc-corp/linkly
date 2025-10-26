@@ -78,9 +78,9 @@ resource "google_cloud_run_v2_service" "ms_admin" {
   name     = "ms-admin"
   location = var.gcp_region
   
-  # Hacemos este servicio PRIVADO (solo se accede desde la VPC o
-  # otros servicios de Cloud Run con permisos)
-  ingress = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  # --- CAMBIO ---
+  # Ahora es PÚBLICO para ser llamado por Axios desde el navegador
+  ingress = "INGRESS_TRAFFIC_ALL"
 
   template {
     service_account = google_service_account.ms_admin_sa.email
@@ -157,6 +157,7 @@ resource "google_cloud_run_v2_service" "frontend" {
         container_port = 5000 # El puerto de Flask
       }
       # Aquí está la magia: inyectamos las URLs de los otros servicios
+      # El frontend (JS/Axios) necesita saber la URL del admin
       env {
         name  = "ADMIN_API_URL"
         value = google_cloud_run_v2_service.ms_admin.uri
@@ -180,21 +181,20 @@ resource "google_cloud_run_v2_service" "frontend" {
 
 
 # 6. Permisos de Invocación
-# Permitir que el frontend (con su SA) invoque al ms-admin (que es privado)
-resource "google_cloud_run_service_iam_member" "admin_invoker" {
-  provider = google
-  location = google_cloud_run_v2_service.ms_admin.location
-  project  = google_cloud_run_v2_service.ms_admin.project
-  service  = google_cloud_run_v2_service.ms_admin.name
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.frontend_sa.email}"
-}
+
+# --- ELIMINADO ---
+# El bloque 'admin_invoker' se ha borrado porque 'ms-admin'
+# ya no es privado y no se necesita permiso de SA a SA.
 
 # Permitir que CUALQUIERA (allUsers) invoque los servicios públicos
 resource "google_cloud_run_service_iam_member" "public_invokers" {
+  
+  # --- CAMBIO ---
+  # Añadimos 'ms-admin' a la lista de servicios públicos
   for_each = toset([
     google_cloud_run_v2_service.frontend.name,
-    google_cloud_run_v2_service.ms_redirect.name
+    google_cloud_run_v2_service.ms_redirect.name,
+    google_cloud_run_v2_service.ms_admin.name
   ])
   provider = google
   location = var.gcp_region
