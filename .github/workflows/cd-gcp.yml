@@ -40,7 +40,7 @@ jobs:
       # No usas una llave JSON. Te autenticas de forma segura.
       - name: Authenticate to Google Cloud
         id: auth
-        uses: 'google-github-actions/auth@v2'
+        uses: 'google-github-actions/auth@v3'
         with:
           # El "Workload Identity Provider" que creas en GCP (ver nota abajo)
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
