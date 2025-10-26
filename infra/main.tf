@@ -32,7 +32,8 @@ resource "google_firestore_database" "database" {
   project         = var.gcp_project_id
   name            = "(default)"
   location_id     = var.gcp_region
-  type            = "NATIVE" # Firestore en modo Nativo
+  
+  type            = "FIRESTORE_NATIVE" 
 
   depends_on = [
     google_project_service.apis["firestore.googleapis.com"]
@@ -87,7 +88,7 @@ resource "google_cloud_run_v2_service" "ms_admin" {
     containers {
       image = "docker.io/${var.docker_hub_user}/linkly-ms-admin:latest"
       ports {
-        container_port = 8080 # El puerto que escucha tu app
+        container_port = 8080
       }
       env {
         name  = "PORT"
@@ -95,11 +96,11 @@ resource "google_cloud_run_v2_service" "ms_admin" {
       }
       env {
         name  = "LINKS_COLLECTION"
-        value = "links" # O usa una variable de terraform
+        value = "links"
       }
       env {
         name  = "METRICS_COLLECTION"
-        value = "metrics" # O usa una variable de terraform
+        value = "metrics"
       }
     }
   }
@@ -180,17 +181,9 @@ resource "google_cloud_run_v2_service" "frontend" {
 }
 
 
-# 6. Permisos de Invocación
-
-# --- ELIMINADO ---
-# El bloque 'admin_invoker' se ha borrado porque 'ms-admin'
-# ya no es privado y no se necesita permiso de SA a SA.
 
 # Permitir que CUALQUIERA (allUsers) invoque los servicios públicos
 resource "google_cloud_run_service_iam_member" "public_invokers" {
-  
-  # --- CAMBIO ---
-  # Añadimos 'ms-admin' a la lista de servicios públicos
   for_each = toset([
     google_cloud_run_v2_service.frontend.name,
     google_cloud_run_v2_service.ms_redirect.name,
