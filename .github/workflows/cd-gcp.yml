@@ -42,28 +42,10 @@ jobs:
         id: auth
         uses: 'google-github-actions/auth@v3'
         with:
-          # El "Workload Identity Provider" que creas en GCP (ver nota abajo)
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          # El email de la cuenta de servicio que le das permiso a GitHub para "usar"
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
-          
-      # --- (Alternativa) Autenticación con Llave JSON (menos seguro) ---
-      # Si no quieres configurar WIF, puedes usar una llave JSON.
-      # Comenta el paso anterior y descomenta este:
-      # - name: Authenticate to Google Cloud (JSON Key)
-      #   id: auth
-      #   uses: 'google-github-actions/auth@v2'
-      #   with:
-      #     credentials_json: secrets.GCP_SA_KEY_JSON
-      # -----------------------------------------------------------------
-      - name: 'Set up Cloud SDK'
-        uses: 'google-github-actions/setup-gcloud@v2'
-
-      - name: 'Test gcloud auth'
-        run: |-
-          gcloud auth list
-          gcloud projects describe ${{ env.GCP_PROJECT_ID }} --format='value(projectNumber)'
-          echo "Si ves el número de proyecto arriba, gcloud SÍ se autenticó."
+          # --- AÑADE ESTA LÍNEA ---
+          create_credentials_file: true
 
       # 3. Instalar Terraform
       - name: Setup Terraform
@@ -87,8 +69,10 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ${{ env.TERRAFORM_DIR }}
         env:
-          # Pasa las variables de GitHub (env y secrets) 
-          # a las variables de Terraform (TF_VAR_...)
+          TF_LOG: DEBUG # Deja el debug por si acaso
+          # --- AÑADE ESTA LÍNEA ---
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+          # -------------------------
           TF_VAR_gcp_project_id: ${{ env.GCP_PROJECT_ID }}
           TF_VAR_gcp_region: ${{ env.GCP_REGION }}
           TF_VAR_docker_hub_user: ${{ env.DOCKERHUB_USER }}
